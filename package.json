@@ -1,0 +1,7 @@
+{
+  "name": "sov-swap",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "description": "Trustless XUS<->ZEC atomic-swap desk (HTLC on both chains)"
+}
