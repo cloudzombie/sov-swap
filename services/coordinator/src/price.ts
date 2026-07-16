@@ -46,7 +46,8 @@ export class PriceService {
   private lastSample = 0;
 
   constructor(
-    private readonly rateXusPerZec: number,
+    /** The live (curve-adjusted) rate — read fresh each time so the price rises with sales. */
+    private readonly rateFn: () => number,
     dataDir: string,
   ) {
     this.file = join(dataDir, 'price-history.json');
@@ -81,10 +82,11 @@ export class PriceService {
   async now(): Promise<PriceNow | null> {
     const zecUsd = await this.zec();
     if (zecUsd === null) return null;
+    const rate = this.rateFn();
     return {
       zecUsd,
-      rateXusPerZec: this.rateXusPerZec,
-      xusUsd: zecUsd / this.rateXusPerZec,
+      rateXusPerZec: rate,
+      xusUsd: zecUsd / rate,
       ts: this.zecTs,
       source: 'coingecko:zcash',
     };

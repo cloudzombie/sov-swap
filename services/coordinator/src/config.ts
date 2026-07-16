@@ -11,8 +11,11 @@ export interface Config {
   sovMmSeedHex: string;
   zecMmWif: string;
   zecSweepAddress: string | null;
-  /** XUS (whole units) paid out per 1 ZEC received — the desk's quoted price. */
+  /** Starting XUS (whole units) per 1 ZEC — the desk's base quote before the sales curve. */
   rateXusPerZec: number;
+  /** Bonding-curve scale: XUS that must sell to HALVE the rate (i.e. double the XUS price).
+   * 0 disables the curve (fixed rate). Smaller = the price climbs faster with sales. */
+  curveK: number;
   minZec: number;
   maxZec: number;
   blockchairApiKey: string | null;
@@ -38,6 +41,7 @@ export function loadConfig(): Config {
     zecMmWif: req('ZEC_MM_WIF'),
     zecSweepAddress: process.env.ZEC_SWEEP_ADDRESS?.trim() || null,
     rateXusPerZec: Number(opt('RATE_XUS_PER_ZEC', '100')),
+    curveK: Number(opt('CURVE_K', '0')),
     minZec: Number(opt('MIN_ZEC', '0.001')),
     maxZec: Number(opt('MAX_ZEC', '1.0')),
     blockchairApiKey: process.env.BLOCKCHAIR_API_KEY?.trim() || null,

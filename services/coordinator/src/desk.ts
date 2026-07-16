@@ -52,7 +52,14 @@ export interface CreateSwapRequest {
 }
 
 export interface Quote {
+  /** Current (curve-adjusted) XUS per ZEC. */
   rateXusPerZec: number;
+  /** Base rate before the sales curve. */
+  baseRate: number;
+  /** XUS sold so far (drives the curve). */
+  soldXus: number;
+  /** Curve scale (XUS per halving); 0 = fixed rate. */
+  curveK: number;
   minZec: number;
   maxZec: number;
   net: string;
@@ -100,9 +107,32 @@ export class Desk {
     return Buffer.from(this.zecKey.publicKey);
   }
 
+  /** Total XUS the desk has SOLD (completed swaps) — the input to the price curve. */
+  soldXus(): number {
+    let grains = 0n;
+    for (const s of this.store.all()) {
+      if (s.phase === 'zec_swept') grains += BigInt(s.terms.xusAmountGrains);
+    }
+    return Number(grains / GRAINS_PER_XUS);
+  }
+
+  /**
+   * The current rate (XUS per ZEC), which FALLS as XUS sells — so each XUS costs more ZEC,
+   * i.e. the XUS price rises with demand. `rate = base / (1 + sold/K)`; `K` is the XUS that
+   * must sell to halve the rate (double the price). `CURVE_K=0` disables it (fixed rate).
+   */
+  currentRate(): number {
+    const base = this.cfg.rateXusPerZec;
+    if (this.cfg.curveK <= 0) return base;
+    return base / (1 + this.soldXus() / this.cfg.curveK);
+  }
+
   quote(): Quote {
     return {
-      rateXusPerZec: this.cfg.rateXusPerZec,
+      rateXusPerZec: this.currentRate(),
+      baseRate: this.cfg.rateXusPerZec,
+      soldXus: this.soldXus(),
+      curveK: this.cfg.curveK,
       minZec: this.cfg.minZec,
       maxZec: this.cfg.maxZec,
       net: this.cfg.net,
@@ -126,7 +156,9 @@ export class Desk {
     if (zecAmt < this.cfg.minZec || zecAmt > this.cfg.maxZec) {
       throw new Error(`amount ${zecAmt} ZEC out of bounds [${this.cfg.minZec}, ${this.cfg.maxZec}]`);
     }
-    const xusOut = zecAmt * this.cfg.rateXusPerZec;
+    // Lock the CURRENT curve-adjusted rate into this swap's terms.
+    const rate = this.currentRate();
+    const xusOut = zecAmt * rate;
     const xusAmountGrains = (BigInt(Math.round(xusOut * 1e8)) * GRAINS_PER_XUS) / 100_000_000n;
 
     // Inventory check: don't quote a swap we can't fill.

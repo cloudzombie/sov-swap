@@ -15,7 +15,7 @@ import type { SwapState } from '@sov-swap/core';
 const cfg = loadConfig();
 const store = new SwapStore(cfg.dataDir);
 const desk = new Desk(cfg, store);
-const price = new PriceService(cfg.rateXusPerZec, cfg.dataDir);
+const price = new PriceService(() => desk.currentRate(), cfg.dataDir);
 
 /** Public view of a swap — only what the browser needs, no internal bookkeeping. */
 function publicView(s: SwapState) {
@@ -96,7 +96,7 @@ const server = createServer(async (req, res) => {
     // Rolling price history for a sparkline/chart.
     if (req.method === 'GET' && url.pathname === '/api/price/history') {
       const n = Number(url.searchParams.get('points')) || undefined;
-      return send(res, 200, { points: price.historyPoints(n), rateXusPerZec: cfg.rateXusPerZec });
+      return send(res, 200, { points: price.historyPoints(n), rateXusPerZec: desk.currentRate() });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/swap') {
