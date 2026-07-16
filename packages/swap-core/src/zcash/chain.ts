@@ -80,6 +80,11 @@ export class BlockchairZcash implements ZcashChain {
   readonly net: ZcashNet;
   private readonly base: string;
   private readonly apiKey?: string;
+  /** Cache the tip so repeated quotes/ticks don't hammer the provider (a keyless
+   * Blockchair IP is blacklisted at ~30 req/min). ZEC blocks are ~75s, so a ~45s cache
+   * costs at most one stale block and turns N callers into ≤1 request/45s. */
+  private tipCache: { h: number; ts: number } | null = null;
+  private static readonly TIP_TTL_MS = 45_000;
 
   constructor(opts: { net: ZcashNet; apiKey?: string; baseUrl?: string }) {
     if (opts.net !== 'mainnet') {
@@ -95,9 +100,28 @@ export class BlockchairZcash implements ZcashChain {
   }
 
   async tipHeight(): Promise<number> {
-    const j = await getJson(`${this.base}/stats${this.key()}`);
+    const now = Date.now();
+    if (this.tipCache && now - this.tipCache.ts < BlockchairZcash.TIP_TTL_MS) {
+      return this.tipCache.h;
+    }
+    let j: any;
+    try {
+      j = await getJson(`${this.base}/stats${this.key()}`);
+    } catch (e) {
+      // On a provider throttle (HTTP 430) fall back to the last good tip rather than
+      // failing the whole quote; only surface an error if we've never had one.
+      if (this.tipCache) return this.tipCache.h;
+      const msg = String((e as Error).message);
+      if (msg.includes('430') || /blacklist|API resources/i.test(msg)) {
+        throw new ZcashChainError(
+          'Zcash chain data is rate-limited by the provider. Set a BLOCKCHAIR_API_KEY, or retry shortly.',
+        );
+      }
+      throw e;
+    }
     const h = j?.data?.best_block_height;
     if (typeof h !== 'number') throw new ZcashChainError('blockchair stats missing best_block_height');
+    this.tipCache = { h, ts: now };
     return h;
   }
 
