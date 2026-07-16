@@ -1,0 +1,22 @@
+{
+  "name": "@sov-swap/coordinator",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "XUS<->ZEC atomic-swap market-maker desk: watches both chains, executes the MM leg, serves the swap API",
+  "main": "./src/server.ts",
+  "scripts": {
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@sov-swap/core": "*",
+    "@sov/sdk": "file:../../../sov/sdk",
+    "@bitgo/utxo-lib": "^11.24.0",
+    "@noble/hashes": "^1.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}

@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Cross-chain HTLC engine for XUS<->ZEC atomic swaps",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "@bitgo/utxo-lib": "^11.24.0",
@@ -18,5 +19,15 @@
     "typescript": "^5.6.0",
     "vitest": "^2.1.0",
     "@types/node": "^22.0.0"
-  }
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ]
 }

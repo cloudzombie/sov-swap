@@ -11,6 +11,7 @@
  * mainnet, CipherScan on testnet) is a config choice, and so the coordinator can be
  * driven by a fake in tests without touching the network.
  */
+import * as utxolib from '@bitgo/utxo-lib';
 import type { ZcashNet } from './network.js';
 
 /** An unspent output at an address. */
@@ -204,9 +205,6 @@ export class CipherScanZcash implements ZcashChain {
 
 /** Decode a raw Zcash tx hex and return its input scripts (fallback path). */
 function parseInputsFromRawHex(rawHex: string, net: ZcashNet): TxInput[] {
-  // Lazy import to avoid a cycle; utxolib is already a dependency.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const utxolib = require('@bitgo/utxo-lib');
   const network = net === 'mainnet' ? utxolib.networks.zcash : utxolib.networks.zcashTest;
   const tx = utxolib.bitgo.createTransactionFromBuffer(Buffer.from(rawHex, 'hex'), network, {
     amountType: 'number',

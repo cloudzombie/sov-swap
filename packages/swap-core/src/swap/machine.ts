@@ -53,6 +53,13 @@ export interface SwapState {
   preimage?: string;
   /** Zcash txid of the desk's sweep, once broadcast. */
   zecSweepTxid?: string;
+  /** The user's ZEC HTLC funding output, captured when confirmed — the input the desk
+   * sweeps. */
+  zecFundingUtxo?: { txid: string; vout: number; valueZat: number };
+  /** SOV height at which the desk locked its XUS — the lower bound for the preimage scan. */
+  xusLockHeight?: number;
+  /** Wall-clock (ms) the swap was created; for expiry/GC. */
+  createdAt?: number;
   /** Human-readable note for terminal/aborted states. */
   note?: string;
 }
