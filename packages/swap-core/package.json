@@ -12,13 +12,15 @@
   },
   "dependencies": {
     "@bitgo/utxo-lib": "^11.24.0",
+    "@grpc/grpc-js": "^1.14.4",
+    "@grpc/proto-loader": "^0.8.1",
     "@noble/hashes": "^1.5.0",
     "@sov/sdk": "file:../../../sov/sdk"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "typescript": "^5.6.0",
-    "vitest": "^2.1.0",
-    "@types/node": "^22.0.0"
+    "vitest": "^2.1.0"
   },
   "types": "./dist/index.d.ts",
   "exports": {

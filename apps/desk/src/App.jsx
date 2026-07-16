@@ -103,11 +103,12 @@ function Sparkline({ points, w = 132, h = 34 }) {
   );
 }
 
-function PriceTracker({ price, hist }) {
+function PriceTracker({ price, hist, quote }) {
   const usd = price?.xusUsd;
   const change =
     hist.length > 1 && hist[0].xusUsd ? ((hist[hist.length - 1].xusUsd - hist[0].xusUsd) / hist[0].xusUsd) * 100 : null;
   const up = change != null && change >= 0;
+  const curve = quote?.curveK > 0;
   return (
     <section className="pricebar">
       <div className="pb-main">
@@ -124,12 +125,17 @@ function PriceTracker({ price, hist }) {
           {price ? (
             <>
               ZEC <b className="mono tick-zec">${price.zecUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b> ÷{" "}
-              <b className="mono tick-xus">{price.rateXusPerZec}</b> desk rate
+              <b className="mono tick-xus">{price.rateXusPerZec.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b> desk rate
             </>
           ) : (
             "live from the desk's swap rate"
           )}
         </div>
+        {curve && (
+          <div className="pb-curve">
+            ▲ rises with every completed swap{quote.soldXus > 0 ? ` · ${quote.soldXus.toLocaleString()} XUS sold` : ""}
+          </div>
+        )}
       </div>
       <div className="pb-spark">
         <Sparkline points={hist} />
@@ -279,7 +285,7 @@ export default function App() {
         </div>
       </header>
 
-      <PriceTracker price={price} hist={hist} />
+      <PriceTracker price={price} hist={hist} quote={quote} />
 
       <section className="rate">
         <div>

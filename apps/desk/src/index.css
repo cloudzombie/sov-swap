@@ -406,3 +406,4 @@ button { font-family: inherit; }
   .pb-spark { align-self: stretch; align-items: flex-start; }
   .spark { width: 100%; }
 }
+.pb-curve { margin-top: 6px; font-size: 11px; color: var(--good); letter-spacing: 0.01em; }

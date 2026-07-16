@@ -9,6 +9,7 @@
 export * from './zcash/htlc.js';
 export * from './zcash/network.js';
 export * from './zcash/chain.js';
+export * from './zcash/lightwalletd.js';
 export * from './sov/htlc.js';
 export * from './protocol.js';
 export * from './swap/machine.js';

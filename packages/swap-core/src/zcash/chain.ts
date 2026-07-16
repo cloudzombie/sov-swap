@@ -13,6 +13,7 @@
  */
 import * as utxolib from '@bitgo/utxo-lib';
 import type { ZcashNet } from './network.js';
+import { LightwalletdZcash } from './lightwalletd.js';
 
 /** An unspent output at an address. */
 export interface Utxo {
@@ -177,7 +178,17 @@ function parseInputsFromRawHex(rawHex: string, _net: ZcashNet): TxInput[] {
   return tx.ins.map((i: any) => ({ script: i.script as Buffer }));
 }
 
-/** Build the right chain client for a network. */
-export function makeZcashChain(net: ZcashNet, opts: { apiKey?: string; baseUrl?: string } = {}): ZcashChain {
-  return new BlockchairZcash({ net, apiKey: opts.apiKey, baseUrl: opts.baseUrl });
+/**
+ * Build the Zcash chain client. Defaults to the FREE lightwalletd (zec.rocks) — no key, no
+ * blacklisting, transparent index enabled. Pass `provider: 'blockchair'` (with an apiKey)
+ * only if you specifically want the REST path.
+ */
+export function makeZcashChain(
+  net: ZcashNet,
+  opts: { provider?: 'lightwalletd' | 'blockchair'; apiKey?: string; baseUrl?: string; endpoints?: string[] } = {},
+): ZcashChain {
+  if (opts.provider === 'blockchair') {
+    return new BlockchairZcash({ net, apiKey: opts.apiKey, baseUrl: opts.baseUrl });
+  }
+  return new LightwalletdZcash({ net, endpoints: opts.endpoints });
 }
