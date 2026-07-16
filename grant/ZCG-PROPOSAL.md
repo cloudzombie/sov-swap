@@ -107,15 +107,19 @@ M3 wk 9, M4 wk 12). Payment on milestone acceptance.
 
 ### 8. Budget
 
-Paid in ZEC at the USD-equivalent on each milestone. **Adjust to your real rates/scope.**
+Paid in ZEC at the USD-equivalent on each milestone. **The figures below are a worked
+example for a ~3-month solo effort — replace with your real rates/scope before submitting.**
 
-| Item | Estimate (USD) |
+| Item | Example (USD) |
 |------|----------------|
-| Engineering — library extraction, vectors, hardening ([X] hrs @ $[rate]) | $[…] |
-| Independent security review of the HTLC/sighash code | $[…] |
-| Infrastructure (chain-data API tier, testnet, hosting) for the grant period | $[…] |
-| Documentation + maintenance reserve (NU upgrades) | $[…] |
-| **Total** | **$[…]** |
+| Engineering — library extraction, cross-impl vectors, hardening (~200 hrs @ $75) | $15,000 |
+| Independent security review of the HTLC construction + sighash | $8,000 |
+| Infrastructure (chain-data access, testnet, hosting) for the grant period | $500 |
+| Documentation + maintenance reserve (branch-id updates across upcoming NUs) | $2,000 |
+| **Total (example — adjust)** | **$25,500** |
+
+Milestone split (from §6): M1 25% · M2 25% · M3 25% · M4 25%. Willing to scope down (e.g.
+drop the external review to a community review) for a smaller ask if ZCG prefers.
 
 ### 9. Team
 
