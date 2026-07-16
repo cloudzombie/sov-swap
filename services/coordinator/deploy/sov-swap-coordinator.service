@@ -1,0 +1,22 @@
+[Unit]
+Description=SOV<->ZEC atomic-swap market-maker desk (coordinator)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/sov-swap/services/coordinator
+EnvironmentFile=/opt/sov-swap/services/coordinator/.env
+ExecStart=/usr/bin/node dist/server.js
+Restart=always
+RestartSec=3
+# Harden: no new privileges, private tmp, read-only system except the data dir.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/sov-swap/services/coordinator/data
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
