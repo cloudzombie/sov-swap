@@ -45,3 +45,14 @@ secret on-chain).
 - Desk keys backed up at `~/Desktop/keys/`; desk `.env` on the explorer droplet (chmod 600).
 - Hosting all on the explorer droplet (104.236.244.93): swap.sovxus.com + coordinator + the
   Codex-upgraded explorer (sovxus.org, node 24 at /opt/node24).
+
+## E. NEW DIRECTIVE (2026-07-16, for a proper design session) — SOV's own contract tooling
+Build SOV's OWN smart-contract toolchain — **"nation-state" grade**, WASM-native (per the
+VM discussion; NOT a bolted-on EVM — it fights the PQ / blake3-implicit-account identity).
+Everything **"NASA code compliant"**: hold it to high-assurance software rules —
+JPL / NASA **Power of Ten** (bounded loops, no recursion, no post-init dynamic allocation,
+check every return, assertions, small functions, minimal preprocessor, restricted pointers),
+plus static analysis + zero-warning builds + full test/KAT coverage. Deliverable to scope:
+an ergonomic Rust contract SDK + templates on the wasmi VM, a hardened host-ABI contract,
+and a compliance checklist/CI gate. See chain/docs/vm-and-token-composability.md for the
+current VM + the three open questions (cross-contract calls, contract-held XUS, gas tuning).
