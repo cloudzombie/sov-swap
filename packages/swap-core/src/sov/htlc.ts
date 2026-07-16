@@ -17,6 +17,7 @@ import {
   grainsToSov,
   type HybridKeypair,
 } from '@sov/sdk';
+import { sha256 } from '@noble/hashes/sha256';
 
 /**
  * The desk signs with the chain's default HYBRID scheme (Ed25519 + ML-DSA-65) — the
@@ -171,4 +172,34 @@ export async function getHtlc(client: SovClient, htlcId: HtlcId): Promise<SovHtl
 /** Current SOV chain height — used to set/relate timeouts. */
 export async function sovHeight(client: SovClient): Promise<number> {
   return client.getHeight();
+}
+
+/**
+ * Scan SOV blocks in `[fromHeight, toHeight]` for the `htlc_claim` that settled `htlcId`,
+ * and return its revealed preimage (hex) — verified to actually hash to `expectedHashlock`
+ * so a malformed/decoy claim can't spoof it.
+ *
+ * This is how the desk learns the secret the TRUSTLESS way: when the user claims their
+ * XUS, the preimage is published in that transaction. The desk reads it straight off the
+ * chain (not from the user's cooperation) and uses it to sweep the ZEC — so even a user
+ * who claims and vanishes cannot strand the desk's counter-leg.
+ */
+export async function findRevealedPreimage(
+  client: SovClient,
+  params: { htlcId: HtlcId; expectedHashlock: string; fromHeight: number; toHeight: number },
+): Promise<Uint8Array | null> {
+  const want = params.expectedHashlock.replace(/^0x/, '').toLowerCase();
+  const wantId = params.htlcId.toLowerCase();
+  for (let h = params.fromHeight; h <= params.toHeight; h++) {
+    const block = await client.getBlockByHeight(h);
+    if (!block) continue;
+    for (const stx of block.transactions) {
+      const action = stx.transaction.action;
+      if (action.type !== 'htlc_claim') continue;
+      if (action.htlc_id.replace(/^0x/, '').toLowerCase() !== wantId.replace(/^0x/, '')) continue;
+      const preimage = Uint8Array.from(action.preimage as ArrayLike<number>);
+      if (hex(sha256(preimage)) === want) return preimage;
+    }
+  }
+  return null;
 }
