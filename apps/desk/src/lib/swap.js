@@ -50,6 +50,7 @@ export function xusFromSeed(seedHex) {
 export function makeApi(base) {
   const b = base.replace(/\/$/, "");
   return {
+    base: b,
     async quote() {
       return (await fetch(`${b}/api/quote`)).json();
     },

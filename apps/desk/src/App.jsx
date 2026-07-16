@@ -44,6 +44,101 @@ function stageIndex(phase) {
   }
 }
 
+// Live XUS reference price + rolling history, from the coordinator.
+function usePrice(api) {
+  const [price, setPrice] = useState(null);
+  const [hist, setHist] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const [p, h] = await Promise.all([
+          fetch(`${api.base}/api/price`).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${api.base}/api/price/history?points=288`).then((r) => (r.ok ? r.json() : { points: [] })),
+        ]);
+        if (!alive) return;
+        if (p) setPrice(p);
+        if (h?.points) setHist(h.points);
+      } catch {
+        /* keep last */
+      }
+    };
+    load();
+    const t = setInterval(load, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [api.base]);
+  return { price, hist };
+}
+
+function Sparkline({ points, w = 132, h = 34 }) {
+  if (!points || points.length < 2) return null;
+  const ys = points.map((p) => p.xusUsd);
+  const min = Math.min(...ys);
+  const max = Math.max(...ys);
+  const span = max - min || 1;
+  const step = w / (points.length - 1);
+  const path = points
+    .map((p, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${(h - 4 - ((p.xusUsd - min) / span) * (h - 8)).toFixed(1)}`)
+    .join(" ");
+  const last = points[points.length - 1];
+  const lx = w;
+  const ly = h - 4 - ((last.xusUsd - min) / span) * (h - 8);
+  const up = ys[ys.length - 1] >= ys[0];
+  const stroke = up ? "var(--good)" : "var(--bad)";
+  return (
+    <svg className="spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={stroke} stopOpacity="0.22" />
+          <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${path} L${w},${h} L0,${h} Z`} fill="url(#sg)" stroke="none" />
+      <path d={path} fill="none" stroke={stroke} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={lx - 1.5} cy={ly} r="2.2" fill={stroke} />
+    </svg>
+  );
+}
+
+function PriceTracker({ price, hist }) {
+  const usd = price?.xusUsd;
+  const change =
+    hist.length > 1 && hist[0].xusUsd ? ((hist[hist.length - 1].xusUsd - hist[0].xusUsd) / hist[0].xusUsd) * 100 : null;
+  const up = change != null && change >= 0;
+  return (
+    <section className="pricebar">
+      <div className="pb-main">
+        <div className="pb-label">XUS reference price</div>
+        <div className="pb-value">
+          <span className="pb-usd">{usd != null ? `$${usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}` : "—"}</span>
+          {change != null && (
+            <span className={`pb-change ${up ? "up" : "down"}`}>
+              {up ? "▲" : "▼"} {Math.abs(change).toFixed(2)}%
+            </span>
+          )}
+        </div>
+        <div className="pb-basis">
+          {price ? (
+            <>
+              ZEC <b className="mono tick-zec">${price.zecUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b> ÷{" "}
+              <b className="mono tick-xus">{price.rateXusPerZec}</b> desk rate
+            </>
+          ) : (
+            "live from the desk's swap rate"
+          )}
+        </div>
+      </div>
+      <div className="pb-spark">
+        <Sparkline points={hist} />
+        {hist.length > 1 && <div className="pb-span">{hist.length >= 288 ? "24h" : `${hist.length} pts`}</div>}
+      </div>
+    </section>
+  );
+}
+
 function Copy({ text }) {
   const [ok, setOk] = useState(false);
   return (
@@ -78,6 +173,7 @@ export default function App() {
   const [swap, setSwap] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const { price, hist } = usePrice(api);
 
   // Load the quote (and keep the rate/inventory fresh).
   useEffect(() => {
@@ -182,6 +278,8 @@ export default function App() {
           </span>
         </div>
       </header>
+
+      <PriceTracker price={price} hist={hist} />
 
       <section className="rate">
         <div>

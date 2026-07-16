@@ -9,11 +9,13 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { loadConfig } from './config.js';
 import { SwapStore } from './store.js';
 import { Desk, type CreateSwapRequest } from './desk.js';
+import { PriceService } from './price.js';
 import type { SwapState } from '@sov-swap/core';
 
 const cfg = loadConfig();
 const store = new SwapStore(cfg.dataDir);
 const desk = new Desk(cfg, store);
+const price = new PriceService(cfg.rateXusPerZec, cfg.dataDir);
 
 /** Public view of a swap — only what the browser needs, no internal bookkeeping. */
 function publicView(s: SwapState) {
@@ -84,6 +86,19 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { ...q, deskAccount: desk.xusAccount(), inventoryXus: inv });
     }
 
+    // Live XUS reference price (ZEC/USD ÷ the desk rate).
+    if (req.method === 'GET' && url.pathname === '/api/price') {
+      const p = await price.now();
+      if (!p) return send(res, 503, { error: 'price source unavailable' });
+      return send(res, 200, p);
+    }
+
+    // Rolling price history for a sparkline/chart.
+    if (req.method === 'GET' && url.pathname === '/api/price/history') {
+      const n = Number(url.searchParams.get('points')) || undefined;
+      return send(res, 200, { points: price.historyPoints(n), rateXusPerZec: cfg.rateXusPerZec });
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/swap') {
       const body = (await readBody(req)) as CreateSwapRequest;
       for (const f of ['hashlock', 'zecRefundPubkey', 'xusRecipient', 'zecAmountZat'] as const) {
@@ -111,6 +126,7 @@ async function pollLoop(): Promise<void> {
   for (;;) {
     try {
       await desk.tick();
+      await price.maybeSample();
     } catch (e) {
       console.error('[poll] tick error:', (e as Error).message);
     }

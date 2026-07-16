@@ -373,3 +373,36 @@ button { font-family: inherit; }
   .rate { flex-wrap: wrap; }
   .rate .inv { text-align: left; }
 }
+
+/* ── price tracker ─────────────────────────────────────────────────────── */
+.pricebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(244, 200, 63, 0.06), transparent 55%),
+    linear-gradient(180deg, var(--panel-2), var(--panel));
+  padding: 16px 20px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow-sm);
+}
+.pb-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.pb-value { display: flex; align-items: baseline; gap: 10px; margin: 3px 0 4px; }
+.pb-usd { font-family: var(--mono); font-size: 30px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.pb-change { font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 2px 7px; border-radius: 999px; }
+.pb-change.up { color: var(--good); background: rgba(116, 210, 159, 0.1); }
+.pb-change.down { color: var(--bad); background: rgba(255, 138, 106, 0.1); }
+.pb-basis { font-size: 12px; color: var(--muted); }
+.pb-basis b { font-weight: 600; }
+.pb-spark { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.spark { display: block; }
+.pb-span { font-family: var(--mono); font-size: 10px; color: var(--faint); letter-spacing: 0.04em; }
+
+@media (max-width: 520px) {
+  .pricebar { flex-direction: column; align-items: flex-start; }
+  .pb-spark { align-self: stretch; align-items: flex-start; }
+  .spark { width: 100%; }
+}
