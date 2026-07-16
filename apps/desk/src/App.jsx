@@ -399,6 +399,28 @@ function Ticket({ swap, active, onClaim, onReset, busy, err }) {
   const refunded = phase === "xus_refunded" || phase === "refunding_xus";
   const settled = phase === "zec_swept" || phase === "xus_claimed";
 
+  // On reload the saved swap's live status hasn't been fetched yet. Render a light loading
+  // state (with recovery data) instead of dereferencing a null `swap` and crashing.
+  if (!swap) {
+    return (
+      <div className="card fade-in">
+        <div className="card-h">
+          <h2>Swap in progress</h2>
+          <span className="sub mono">{shorten(active.id, 6)}</span>
+        </div>
+        <div className="card-b">
+          <p style={{ color: "var(--muted)", fontSize: 13, margin: 0 }}>
+            <span className="spin gold" /> Loading swap status…
+          </p>
+          <Recovery active={active} swap={null} />
+          <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={onReset}>
+            Abandon this swap
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="card fade-in">
       <div className="card-h">

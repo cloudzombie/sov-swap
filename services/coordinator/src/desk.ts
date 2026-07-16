@@ -17,6 +17,7 @@ import {
   buildClaimTx,
   planTimeouts,
   lockXus,
+  transferXus,
   claimXus as _claimXus, // (user-side; unused here but kept for parity)
   refundXus,
   getHtlc,
@@ -38,6 +39,11 @@ const { ECPair } = utxolib;
 /** Wall-clock block times (seconds) used to translate timeouts to/from heights. */
 const SOV_BLOCK_TIME_SEC = 60;
 const ZEC_BLOCK_TIME_SEC = 75;
+
+/** XUS the desk seeds a fresh recipient so it can pay the `htlc_claim` network fee. A new
+ * 0-balance account cannot otherwise afford the claim (chicken-and-egg). Small desk
+ * overhead; the recipient nets ~the quoted amount after the fee. */
+const FEE_BOOTSTRAP_GRAINS = 5_000_000n; // 0.05 XUS
 
 export interface CreateSwapRequest {
   /** 32-byte SHA-256 hashlock (hex) chosen by the user's browser. */
@@ -253,11 +259,21 @@ export class Desk {
         break;
 
       case 'lock_xus': {
+        const deskAcct = this.xusKey.publicKey.accountId();
+        const nonce = await this.sov.getNonce(deskAcct);
+        // Seed the recipient's claim fee FIRST (nonce N) — a fresh 0-balance account can't
+        // pay the htlc_claim fee — then lock the XUS (nonce N+1) in the same tick.
+        await transferXus(this.sov, this.xusKey, {
+          to: s.terms.xusRecipient,
+          amountGrains: FEE_BOOTSTRAP_GRAINS,
+          nonce,
+        });
         const res = await lockXus(this.sov, this.xusKey, {
           recipient: s.terms.xusRecipient,
           amountGrains: BigInt(s.terms.xusAmountGrains),
           hashlock: Buffer.from(s.terms.hashlock, 'hex'),
           timeoutHeight: s.terms.xusTimeoutHeight,
+          nonce: nonce + 1,
         });
         s.deskXusHtlcId = res.txId;
         s.xusLockHeight = obs.sov.tip;

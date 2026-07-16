@@ -14,7 +14,6 @@ import {
   buildAndSign,
   toWireSignedTransaction,
   SovClient,
-  grainsToSov,
   type HybridKeypair,
 } from '@sov/sdk';
 import { sha256 } from '@noble/hashes/sha256';
@@ -72,6 +71,9 @@ export async function lockXus(
     amountGrains: bigint;
     hashlock: Uint8Array | Buffer;
     timeoutHeight: number;
+    /** Explicit nonce; if omitted, fetched from the chain. Pass it when submitting several
+     * txs from the same account in one tick so their nonces don't collide. */
+    nonce?: number;
   },
 ): Promise<SovSubmitResult> {
   const hl = Buffer.from(params.hashlock);
@@ -80,7 +82,7 @@ export async function lockXus(
     throw new Error(`timeoutHeight must be a positive height, got ${params.timeoutHeight}`);
   }
   const signer = keypair.publicKey.accountId();
-  const nonce = await client.getNonce(signer);
+  const nonce = params.nonce ?? (await client.getNonce(signer));
   const signed = buildAndSign({
     signer,
     keypair,
@@ -88,12 +90,20 @@ export async function lockXus(
     action: {
       type: 'htlc_lock',
       recipient: params.recipient,
-      amount: grainsToSov(params.amountGrains),
+      // The chain's amount is a GrainString — grains as an INTEGER string (e.g.
+      // "100000000" for 1 XUS), NOT a decimal. The SDK validates it with BigInt(), which
+      // throws on a decimal like "1.00000000".
+      amount: params.amountGrains.toString(),
       hashlock: hex(hl),
       timeout_height: params.timeoutHeight,
     },
   });
-  const res = await client.submitTransaction(toWireSignedTransaction(signed));
+  const wire = toWireSignedTransaction(signed);
+  // The node deserializes `hashlock` as a JSON array of 32 bytes ([u8;32], no hex serde),
+  // while the SDK Borsh-SIGNS it from the hex string. Emit the byte array on the wire — the
+  // signature is over the same 32 bytes, so it still verifies and the tx-id is unchanged.
+  (wire.transaction.action as { hashlock?: unknown }).hashlock = Array.from(hl);
+  const res = await client.submitTransaction(wire);
   return { txId: res.txId ?? signed.id, accepted: res.accepted };
 }
 
@@ -167,6 +177,28 @@ export async function getHtlc(client: SovClient, htlcId: HtlcId): Promise<SovHtl
     hashlock: raw.hashlock.replace(/^0x/, ''),
     timeoutHeight: raw.timeoutHeight,
   };
+}
+
+/**
+ * Send a plain XUS transfer. Used to **bootstrap the recipient's claim fee**: a fresh
+ * (0-balance) account cannot pay the network fee an `htlc_claim` costs, so the desk seeds
+ * it a small amount before/with locking. Returns the submit result.
+ */
+export async function transferXus(
+  client: SovClient,
+  keypair: AnyKeypair,
+  params: { to: string; amountGrains: bigint; nonce?: number },
+): Promise<SovSubmitResult> {
+  const signer = keypair.publicKey.accountId();
+  const nonce = params.nonce ?? (await client.getNonce(signer));
+  const signed = buildAndSign({
+    signer,
+    keypair,
+    nonce,
+    action: { type: 'transfer', to: params.to, amount: params.amountGrains.toString() },
+  });
+  const res = await client.submitTransaction(toWireSignedTransaction(signed));
+  return { txId: res.txId ?? signed.id, accepted: res.accepted };
 }
 
 /** Current SOV chain height — used to set/relate timeouts. */
