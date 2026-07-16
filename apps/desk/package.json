@@ -1,0 +1,24 @@
+{
+  "name": "@sov-swap/desk",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "@sov/sdk": "file:../../../sov/sdk",
+    "@noble/hashes": "^1.5.0",
+    "@noble/secp256k1": "^2.1.0",
+    "@scure/base": "^1.1.9",
+    "buffer": "^6.0.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.1",
+    "vite": "^7.3.1"
+  }
+}

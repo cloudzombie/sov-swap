@@ -65,6 +65,20 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { ok: true, net: cfg.net });
     }
 
+    // SOV JSON-RPC passthrough. The web app is https (Vercel) and the relay RPC is
+    // plain http, so a browser can't call the node directly (mixed content). This relays
+    // the browser's own SIGNED transaction / read calls to the node — it can't forge
+    // anything (the tx is already signed) and exposes no desk secret.
+    if (req.method === 'POST' && url.pathname === '/api/sov') {
+      const body = await readBody(req);
+      const upstream = await fetch(cfg.sovRpcUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return send(res, upstream.status, await upstream.json());
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/quote') {
       const [q, inv] = [desk.quote(), await desk.inventoryXus()];
       return send(res, 200, { ...q, deskAccount: desk.xusAccount(), inventoryXus: inv });
