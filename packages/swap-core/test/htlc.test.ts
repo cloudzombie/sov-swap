@@ -110,26 +110,13 @@ describe('address derivation', () => {
     expect(addr.startsWith('t3')).toBe(true);
   });
 
-  it('derives a testnet t2 P2SH address', () => {
-    const addr = htlcAddress(terms(), 'testnet');
-    expect(addr.startsWith('t2')).toBe(true);
-  });
-
-  it('gives different addresses on different networks for identical terms', () => {
-    expect(htlcAddress(terms(), 'mainnet')).not.toBe(htlcAddress(terms(), 'testnet'));
-  });
-
   it('round-trips to the HTLC output script — funds land where we think they do', () => {
     // The address we publish and the script we later spend MUST be the same escrow.
     // Zcash's two-byte version prefix is where a naive bitcoin encoder goes wrong, so
     // this pins the encoding end-to-end rather than trusting the prefix by eye.
-    for (const net of ['mainnet', 'testnet'] as const) {
-      const addr = htlcAddress(terms(), net);
-      const fromAddr = utxolib.address.toOutputScript(addr, utxolib.networks[
-        net === 'mainnet' ? 'zcash' : 'zcashTest'
-      ]);
-      expect(fromAddr).toEqual(htlcOutputScript(terms(), net));
-    }
+    const addr = htlcAddress(terms(), 'mainnet');
+    const fromAddr = utxolib.address.toOutputScript(addr, utxolib.networks.zcash);
+    expect(fromAddr).toEqual(htlcOutputScript(terms(), 'mainnet'));
   });
 });
 

@@ -3,7 +3,7 @@
  *
  * THE BRANCH ID IS THE SHARP EDGE. Zcash's transparent sighash (ZIP-243/244) commits
  * to the consensus branch id of the *currently active* network upgrade. Zcash ships a
- * network upgrade roughly quarterly, and each one changes that id. If we sign against a
+ * network upgrade changes that id. If we sign against a
  * stale branch id every transaction we produce is silently invalid — it will not relay,
  * with no useful error. This has repeatedly broken shipped wallets (Trust Wallet,
  * Ledger), so we do NOT rely on the bundled library defaults: `@bitgo/utxo-lib@11.24.0`
@@ -11,15 +11,15 @@
  *
  * Therefore the branch id is EXPLICIT CONFIG here, overridable at runtime, and the
  * active upgrade is selected by height so a swap spanning an activation still signs
- * correctly. Before each upgrade: add the entry, set `activationHeight`, test on
- * testnet.
+ * correctly. Before each upgrade: add the entry, set `activationHeight`, and verify the
+ * activation boundary.
  *
  * Sources to track: https://z.cash/upgrade/ and
  * https://github.com/zcash/zcash/blob/master/src/consensus/upgrades.cpp
  */
 import * as utxolib from '@bitgo/utxo-lib';
 
-export type ZcashNet = 'mainnet' | 'testnet';
+export type ZcashNet = 'mainnet';
 
 /** A Zcash network upgrade: its consensus branch id and the height it activates at. */
 export interface NetworkUpgrade {
@@ -42,24 +42,13 @@ export const MAINNET_UPGRADES: NetworkUpgrade[] = [
   { name: 'NU6.3', branchId: 0x37a5165b, activationHeight: 3_428_143 },
 ];
 
-/**
- * Testnet upgrade table. Testnet activates upgrades ahead of mainnet, which is exactly
- * why we rehearse there before each activation.
- */
-export const TESTNET_UPGRADES: NetworkUpgrade[] = [
-  { name: 'NU5', branchId: 0xc2d6d0b4, activationHeight: 1_842_420 },
-  { name: 'NU6', branchId: 0xc8e71055, activationHeight: 2_976_000 },
-  { name: 'NU6.1', branchId: 0x4dec4df0, activationHeight: 3_536_500 },
-  { name: 'NU6.2', branchId: 0x5437f330, activationHeight: 3_643_400 },
-];
-
 /** The bitgo network object for a given net. */
-export function utxoNetwork(net: ZcashNet) {
-  return net === 'mainnet' ? utxolib.networks.zcash : utxolib.networks.zcashTest;
+export function utxoNetwork(_net: ZcashNet) {
+  return utxolib.networks.zcash;
 }
 
-export function upgradeTable(net: ZcashNet): NetworkUpgrade[] {
-  return net === 'mainnet' ? MAINNET_UPGRADES : TESTNET_UPGRADES;
+export function upgradeTable(_net: ZcashNet): NetworkUpgrade[] {
+  return MAINNET_UPGRADES;
 }
 
 /**

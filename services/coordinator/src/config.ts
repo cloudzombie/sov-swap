@@ -31,12 +31,8 @@ function opt(name: string, dflt: string): string {
 }
 
 export function loadConfig(): Config {
-  const net = opt('SWAP_NET', 'testnet');
-  if (net !== 'testnet' && net !== 'mainnet') {
-    throw new Error(`SWAP_NET must be testnet|mainnet, got ${net}`);
-  }
   return {
-    net,
+    net: 'mainnet',
     sovRpcUrl: req('SOV_RPC_URL'),
     sovMmSeedHex: req('SOV_MM_SEED_HEX'),
     zecMmWif: req('ZEC_MM_WIF'),

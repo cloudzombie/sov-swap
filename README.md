@@ -43,10 +43,10 @@ If anything stalls, both sides refund via their HTLC timeout — no counterparty
 **1. Seed the desk.** Mine/transfer XUS to the desk account (derived from `SOV_MM_SEED_HEX`).
 Generate a Zcash key; its address receives the ZEC the desk earns.
 
-**2. Coordinator** (on the faucet droplet — no new host needed):
+**2. Coordinator** (on a production host):
 ```
 cd services/coordinator && npm ci && npm run build
-cp .env.example .env    # set SWAP_NET, keys, RATE_XUS_PER_ZEC, MIN/MAX_ZEC
+cp .env.example .env    # set keys, RATE_XUS_PER_ZEC, MIN/MAX_ZEC
 # install the systemd unit + nginx https vhost from ./deploy/, then:
 systemctl enable --now sov-swap-coordinator
 ```
@@ -59,20 +59,20 @@ cd apps/desk && VITE_COORDINATOR_URL=https://swap-api.sovxus.org npm run build
 ```
 Deploy `dist/` (or point Vercel at this dir). Suggested domain: `swap.sovxus.com`.
 
-**4. Prove it before real money.** Run one full round-trip on **Zcash testnet** first
-(`SWAP_NET=testnet`, TAZ from the zfaucet), playing both user and desk, and confirm the
-XUS moves desk→user and the ZEC is swept — plus the timeout→refund path. Only then flip to
-mainnet with small bounds.
+**4. Launch with strict limits.** The application is mainnet-only. Start with a very small
+`MAX_ZEC`, complete one full round-trip, playing both user and desk, and confirm the XUS
+moves desk→user and the ZEC is swept. Separately exercise and verify the timeout→refund
+path with the smallest practical amount before raising the desk's limits.
 
 ## Test
 
 ```
-cd packages/swap-core && npm test     # 49 tests: HTLC (both legs), protocol, machine
+cd packages/swap-core && npm test     # 47 tests: HTLC (both legs), protocol, machine
 ```
 
 ## The one operational tax
 
 Zcash rotates its **consensus branch id** ~quarterly (NU6.3 activates 2026-07-28). A stale
 id silently produces unbroadcastable transactions. It's explicit, height-selected config in
-`packages/swap-core/src/zcash/network.ts` — keep it current and rehearse on testnet before
-each activation.
+`packages/swap-core/src/zcash/network.ts` — keep it current and verify upgrade readiness
+before each activation.

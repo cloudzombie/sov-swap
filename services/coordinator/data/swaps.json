@@ -1,0 +1,17 @@
+[
+  {
+    "terms": {
+      "id": "swap_mrmv761x_0",
+      "hashlock": "9c32d2d14c6673b06f45d7762b56c829f9fc69d3bd23e0d6c3b7ec55e9355122",
+      "zecHtlcAddress": "t3U9JY4Pb19XWbuHsc6hg4nCs5nVsFaAYYS",
+      "zecAmountZat": 1000000,
+      "zecTimeoutHeight": 3414372,
+      "xusRecipient": "f351be8f6567cc9f0b906bbc8a4414af837942f8b4b02cf7f0697c31f54c9d76",
+      "xusAmountGrains": "100000000",
+      "xusTimeoutHeight": 6964
+    },
+    "phase": "awaiting_zec_lock",
+    "createdAt": 1784167391589,
+    "zecRefundPubkey": "03dc54de78c273f6f532e3d4f96a0d0bc2b6575cf6103d0b63c18c0d2982ed550d"
+  }
+]

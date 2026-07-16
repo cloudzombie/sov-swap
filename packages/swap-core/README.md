@@ -24,7 +24,7 @@ no `OP_SHA256`.
   active network upgrade, which rotates ~quarterly. A stale id silently produces
   unbroadcastable transactions. It is explicit config here (`src/zcash/network.ts`),
   selected by height, and fails loudly rather than guessing. **NU6.3 activates
-  2026-07-28** — keep the table current and rehearse on testnet before each activation.
+  2026-07-28** — keep the table current and verify each activation boundary before launch.
 - **Two-byte base58 prefixes.** Zcash P2SH addresses (`t3…`/`t2…`) use a two-byte
   version; upstream bitcoinjs `payments.p2sh` writes one byte. We use the Zcash-aware
   `utxolib.address` encoder, and a test round-trips address → output script.

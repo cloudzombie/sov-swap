@@ -14,7 +14,9 @@ import {
   ZAT,
 } from "./lib/swap.js";
 
-const COORD = import.meta.env.VITE_COORDINATOR_URL || "http://localhost:8790";
+// Empty → same-origin (production: the app and the /api coordinator are served from the
+// same host). Dev passes VITE_COORDINATOR_URL=http://localhost:8790.
+const COORD = import.meta.env.VITE_COORDINATOR_URL || "";
 const REPO = "https://github.com/cloudzombie/sov";
 
 // The lifecycle, in the order the spine renders. Maps the coordinator's phases to the four
@@ -174,7 +176,7 @@ export default function App() {
           <span className="mark">⚖</span> The Desk <small>· ZEC → XUS</small>
         </a>
         <div className="badges">
-          {quote && <span className="badge net">{quote.net === "mainnet" ? "mainnet" : "zcash-testnet"}</span>}
+          {quote && <span className="badge net">mainnet</span>}
           <span className="badge">
             <span className="dot" /> live
           </span>

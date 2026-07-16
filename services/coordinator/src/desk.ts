@@ -74,14 +74,13 @@ export class Desk {
     this.sov = new SovClient({ endpoint: cfg.sovRpcUrl });
     this.zec = makeZcashChain(cfg.net, { apiKey: cfg.blockchairApiKey ?? undefined });
     this.xusKey = HybridKeypair.fromSeed(Buffer.from(cfg.sovMmSeedHex, 'hex'));
-    this.zecNetwork = cfg.net === 'mainnet' ? utxolib.networks.zcash : utxolib.networks.zcashTest;
+    this.zecNetwork = utxolib.networks.zcash;
     // The secp256k1 keypair is network-agnostic, but vanilla ECPair's typeforce rejects
-    // Zcash's two-byte `pubKeyHash`. Zcash reuses Bitcoin's single-byte WIF version
-    // (0x80 mainnet / 0xef testnet), so we decode/sign under the matching BITCOIN network
+    // Zcash's two-byte `pubKeyHash`. Zcash mainnet reuses Bitcoin's 0x80 WIF version,
+    // so we decode/sign under the Bitcoin network
     // and use the real Zcash network only where it matters — address encoding and the
     // ZIP-243 sighash inside the tx builder.
-    const signingNetwork = cfg.net === 'mainnet' ? utxolib.networks.bitcoin : utxolib.networks.testnet;
-    this.zecKey = ECPair.fromWIF(cfg.zecMmWif, signingNetwork);
+    this.zecKey = ECPair.fromWIF(cfg.zecMmWif, utxolib.networks.bitcoin);
     this.zecSweepAddress =
       cfg.zecSweepAddress ??
       utxolib.address.toBase58Check(

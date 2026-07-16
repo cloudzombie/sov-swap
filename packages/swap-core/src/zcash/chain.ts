@@ -7,9 +7,9 @@
  *   3. broadcast a raw tx      (to sweep the HTLC)
  *   4. a transaction's inputs  (to read a revealed preimage off a claim)
  *
- * All four are behind one `ZcashChain` interface so the provider (Blockchair on
- * mainnet, CipherScan on testnet) is a config choice, and so the coordinator can be
- * driven by a fake in tests without touching the network.
+ * All four are behind one `ZcashChain` interface so the coordinator can be driven by a
+ * fake in tests without touching the network. Production access is mainnet-only through
+ * Blockchair.
  */
 import * as utxolib from '@bitgo/utxo-lib';
 import type { ZcashNet } from './network.js';
@@ -82,9 +82,8 @@ export class BlockchairZcash implements ZcashChain {
   private readonly apiKey?: string;
 
   constructor(opts: { net: ZcashNet; apiKey?: string; baseUrl?: string }) {
-    // Blockchair serves Zcash MAINNET only; testnet uses CipherScan below.
     if (opts.net !== 'mainnet') {
-      throw new ZcashChainError('BlockchairZcash supports mainnet only; use CipherScanZcash for testnet');
+      throw new ZcashChainError('BlockchairZcash supports mainnet only');
     }
     this.net = opts.net;
     this.base = opts.baseUrl ?? 'https://api.blockchair.com/zcash';
@@ -146,67 +145,9 @@ export class BlockchairZcash implements ZcashChain {
   }
 }
 
-/**
- * CipherScan Zcash REST adapter — the researched primary for TESTNET. Same interface;
- * endpoints follow the Insight-style shape CipherScan exposes. Base defaults to the
- * public testnet API. Broadcast uses the Insight `/tx/send` convention.
- *
- * Ref: https://github.com/Kenbak/cipherscan
- */
-export class CipherScanZcash implements ZcashChain {
-  readonly net: ZcashNet;
-  private readonly base: string;
-
-  constructor(opts: { net?: ZcashNet; baseUrl?: string } = {}) {
-    this.net = opts.net ?? 'testnet';
-    this.base = opts.baseUrl ?? 'https://api.testnet.cipherscan.app/api';
-  }
-
-  async tipHeight(): Promise<number> {
-    const j = await getJson(`${this.base}/status?q=getInfo`);
-    const h = j?.info?.blocks ?? j?.blocks;
-    if (typeof h !== 'number') throw new ZcashChainError('cipherscan status missing block height');
-    return h;
-  }
-
-  async utxos(address: string): Promise<Utxo[]> {
-    const j = await getJson(`${this.base}/addr/${address}/utxo`);
-    if (!Array.isArray(j)) return [];
-    return j.map((u: any) => ({
-      txid: u.txid,
-      vout: u.vout,
-      valueZat: typeof u.satoshis === 'number' ? u.satoshis : Math.round((u.amount ?? 0) * 1e8),
-      confirmations: u.confirmations ?? 0,
-    }));
-  }
-
-  async broadcast(rawHex: string): Promise<string> {
-    const j = await getJson(`${this.base}/tx/send`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ rawtx: rawHex }),
-    });
-    const txid = j?.txid;
-    if (!txid) throw new ZcashChainError(`broadcast returned no txid: ${JSON.stringify(j).slice(0, 200)}`);
-    return txid;
-  }
-
-  async txInputs(txid: string): Promise<TxInput[]> {
-    const j = await getJson(`${this.base}/tx/${txid}`);
-    if (Array.isArray(j?.vin)) {
-      return j.vin.map((vin: any) => ({
-        script: Buffer.from(vin?.scriptSig?.hex ?? '', 'hex'),
-      }));
-    }
-    if (typeof j?.rawtx === 'string') return parseInputsFromRawHex(j.rawtx, this.net);
-    throw new ZcashChainError(`transaction ${txid} not found`);
-  }
-}
-
 /** Decode a raw Zcash tx hex and return its input scripts (fallback path). */
-function parseInputsFromRawHex(rawHex: string, net: ZcashNet): TxInput[] {
-  const network = net === 'mainnet' ? utxolib.networks.zcash : utxolib.networks.zcashTest;
-  const tx = utxolib.bitgo.createTransactionFromBuffer(Buffer.from(rawHex, 'hex'), network, {
+function parseInputsFromRawHex(rawHex: string, _net: ZcashNet): TxInput[] {
+  const tx = utxolib.bitgo.createTransactionFromBuffer(Buffer.from(rawHex, 'hex'), utxolib.networks.zcash, {
     amountType: 'number',
   });
   return tx.ins.map((i: any) => ({ script: i.script as Buffer }));
@@ -214,7 +155,5 @@ function parseInputsFromRawHex(rawHex: string, net: ZcashNet): TxInput[] {
 
 /** Build the right chain client for a network. */
 export function makeZcashChain(net: ZcashNet, opts: { apiKey?: string; baseUrl?: string } = {}): ZcashChain {
-  return net === 'mainnet'
-    ? new BlockchairZcash({ net, apiKey: opts.apiKey, baseUrl: opts.baseUrl })
-    : new CipherScanZcash({ net, baseUrl: opts.baseUrl });
+  return new BlockchairZcash({ net, apiKey: opts.apiKey, baseUrl: opts.baseUrl });
 }

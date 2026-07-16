@@ -168,7 +168,7 @@ export function htlcRedeemScript(terms: HtlcTerms): Buffer {
  * and can be independently recomputed by the counterparty from the same terms.
  *
  * NOTE: we deliberately do NOT use bitcoinjs `payments.p2sh().address`. Zcash's base58
- * version prefixes are TWO bytes (mainnet P2SH 0x1cbd → `t3…`, testnet 0x1cba → `t2…`),
+ * version prefixes are TWO bytes (mainnet P2SH 0x1cbd → `t3…`),
  * while upstream bitcoinjs writes a single version byte and throws on anything > 255.
  * `utxolib.address` is the Zcash-aware encoder that handles the wide prefix.
  */
