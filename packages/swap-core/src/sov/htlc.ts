@@ -1,0 +1,174 @@
+/**
+ * SOV/XUS HTLC leg — the XUS half of an XUS↔ZEC atomic swap.
+ *
+ * Unlike Zcash, SOV has native HTLC actions (`htlc_lock` / `htlc_claim` / `htlc_refund`),
+ * so this is a thin, honest wrapper over `@sov/sdk`: build the action, sign it (default
+ * hybrid Ed25519+ML-DSA-65), submit it, and read escrow state back over JSON-RPC.
+ *
+ * The one contract that makes it interoperate with the Zcash leg: the `hashlock` is the
+ * SINGLE SHA-256 of the raw secret — the same 32 bytes the Zcash `OP_SHA256` path locks
+ * against — and `htlc_claim.preimage` is the raw secret bytes, which the node verifies as
+ * `sha256(preimage) == hashlock`.
+ */
+import {
+  buildAndSign,
+  toWireSignedTransaction,
+  SovClient,
+  grainsToSov,
+  type HybridKeypair,
+} from '@sov/sdk';
+
+/**
+ * The desk signs with the chain's default HYBRID scheme (Ed25519 + ML-DSA-65) — the
+ * post-quantum signature every real SOV account uses. `accountId()` lives on the hybrid
+ * public key.
+ */
+type AnyKeypair = HybridKeypair;
+
+/** The `htlc_id` on SOV is the tx-id of the `htlc_lock` transaction (0x-hex). */
+export type HtlcId = string;
+
+/** Escrow state as returned by `sov_getHtlc`. */
+export interface SovHtlcState {
+  locker: string;
+  recipient: string;
+  /** Amount in grains (1e-8 XUS). */
+  amountGrains: bigint;
+  /** 32-byte SHA-256 hashlock, hex (no 0x). */
+  hashlock: string;
+  timeoutHeight: number;
+}
+
+/** Result of submitting a SOV transaction. */
+export interface SovSubmitResult {
+  txId: string;
+  accepted: boolean;
+}
+
+/** Hex (with or without 0x) → the raw byte array `htlc_claim.preimage` expects. */
+function toPreimageBytes(preimage: Uint8Array): number[] {
+  return Array.from(preimage);
+}
+
+function hex(buf: Uint8Array | Buffer): string {
+  return Buffer.from(buf).toString('hex');
+}
+
+/**
+ * Lock XUS into an HTLC for `recipient`, redeemable with the secret behind `hashlock`
+ * until `timeoutHeight`, after which the locker may refund. Returns the submit result;
+ * the `txId` IS the `htlc_id` used to claim/refund/query.
+ *
+ * On the desk this is the MARKET-MAKER's leg: it locks the seeded XUS the user will
+ * claim. It is deliberately the shorter-timeout (responder) side of the swap — see
+ * `protocol.ts` for why that protects the seeded inventory.
+ */
+export async function lockXus(
+  client: SovClient,
+  keypair: AnyKeypair,
+  params: {
+    recipient: string;
+    amountGrains: bigint;
+    hashlock: Uint8Array | Buffer;
+    timeoutHeight: number;
+  },
+): Promise<SovSubmitResult> {
+  const hl = Buffer.from(params.hashlock);
+  if (hl.length !== 32) throw new Error(`hashlock must be 32 bytes, got ${hl.length}`);
+  if (!Number.isInteger(params.timeoutHeight) || params.timeoutHeight <= 0) {
+    throw new Error(`timeoutHeight must be a positive height, got ${params.timeoutHeight}`);
+  }
+  const signer = keypair.publicKey.accountId();
+  const nonce = await client.getNonce(signer);
+  const signed = buildAndSign({
+    signer,
+    keypair,
+    nonce,
+    action: {
+      type: 'htlc_lock',
+      recipient: params.recipient,
+      amount: grainsToSov(params.amountGrains),
+      hashlock: hex(hl),
+      timeout_height: params.timeoutHeight,
+    },
+  });
+  const res = await client.submitTransaction(toWireSignedTransaction(signed));
+  return { txId: res.txId ?? signed.id, accepted: res.accepted };
+}
+
+/**
+ * Claim an XUS HTLC by revealing `preimage`. This publishes the secret on the SOV chain,
+ * which is exactly how the counterparty learns it to finish the ZEC leg.
+ *
+ * On the desk this is the USER's action — it's how they receive their XUS — and it is
+ * what arms the desk to sweep the user's ZEC.
+ */
+export async function claimXus(
+  client: SovClient,
+  keypair: AnyKeypair,
+  params: { htlcId: HtlcId; preimage: Uint8Array },
+): Promise<SovSubmitResult> {
+  const signer = keypair.publicKey.accountId();
+  const nonce = await client.getNonce(signer);
+  const signed = buildAndSign({
+    signer,
+    keypair,
+    nonce,
+    action: {
+      type: 'htlc_claim',
+      htlc_id: params.htlcId,
+      preimage: toPreimageBytes(params.preimage),
+    },
+  });
+  const res = await client.submitTransaction(toWireSignedTransaction(signed));
+  return { txId: res.txId ?? signed.id, accepted: res.accepted };
+}
+
+/** Refund an XUS HTLC back to its locker, valid only once the chain passes its timeout. */
+export async function refundXus(
+  client: SovClient,
+  keypair: AnyKeypair,
+  params: { htlcId: HtlcId },
+): Promise<SovSubmitResult> {
+  const signer = keypair.publicKey.accountId();
+  const nonce = await client.getNonce(signer);
+  const signed = buildAndSign({
+    signer,
+    keypair,
+    nonce,
+    action: { type: 'htlc_refund', htlc_id: params.htlcId },
+  });
+  const res = await client.submitTransaction(toWireSignedTransaction(signed));
+  return { txId: res.txId ?? signed.id, accepted: res.accepted };
+}
+
+/** Raw `sov_getHtlc` response shape (camelCase per the node's JSON). */
+interface RawHtlc {
+  locker: string;
+  recipient: string;
+  amount: string;
+  hashlock: string;
+  timeoutHeight: number;
+}
+
+/**
+ * Read an HTLC's escrow state, or `null` if it doesn't exist / was already
+ * settled (claimed or refunded). The desk polls this to observe its own lock and to
+ * detect the user's claim (the escrow vanishes once claimed).
+ */
+export async function getHtlc(client: SovClient, htlcId: HtlcId): Promise<SovHtlcState | null> {
+  const raw = await client.call<RawHtlc | null>('sov_getHtlc', { hash: htlcId });
+  if (!raw) return null;
+  return {
+    locker: raw.locker,
+    recipient: raw.recipient,
+    amountGrains: BigInt(raw.amount),
+    hashlock: raw.hashlock.replace(/^0x/, ''),
+    timeoutHeight: raw.timeoutHeight,
+  };
+}
+
+/** Current SOV chain height — used to set/relate timeouts. */
+export async function sovHeight(client: SovClient): Promise<number> {
+  return client.getHeight();
+}

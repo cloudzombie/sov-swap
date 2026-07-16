@@ -43,6 +43,44 @@ import {
 
 const { opcodes, script: bscript, crypto: bcrypto, address: baddress } = utxolib;
 
+/**
+ * The concrete Zcash builder/tx surface we use. `createTransactionBuilderForNetwork`
+ * is typed as the generic base builder, but for a Zcash network it returns a
+ * ZcashTransactionBuilder whose Sapling/NU setters (`setConsensusBranchId`,
+ * `setVersionGroupId`, `setExpiryHeight`) and the ZIP-243/244 sighash
+ * (`hashForSignatureByNetwork`) are exactly what an HTLC spend needs. We narrow to a
+ * structural interface rather than reach for `any`.
+ */
+interface ZcashTx {
+  hashForSignatureByNetwork(
+    inIndex: number,
+    prevOutScript: Buffer,
+    value: number | bigint | undefined,
+    hashType: number,
+  ): Buffer;
+  setInputScript(index: number, script: Buffer): void;
+  toBuffer(): Buffer;
+  getId(): string;
+  ins: Array<{ script: Buffer; sequence: number }>;
+  locktime: number;
+}
+interface ZcashTxBuilder {
+  setVersion(v: number): void;
+  setVersionGroupId(v: number): void;
+  setConsensusBranchId(v: number): void;
+  setExpiryHeight(v: number): void;
+  setLockTime(v: number): void;
+  addInput(txid: string, vout: number, sequence?: number): number;
+  addOutput(script: Buffer, value: number): number;
+  buildIncomplete(): ZcashTx;
+}
+
+function zcashBuilder(network: unknown): ZcashTxBuilder {
+  return utxolib.bitgo.createTransactionBuilderForNetwork(
+    network as Parameters<typeof utxolib.bitgo.createTransactionBuilderForNetwork>[0],
+  ) as unknown as ZcashTxBuilder;
+}
+
 /** `Transaction.SIGHASH_ALL` — we always commit to every input and output. */
 const SIGHASH_ALL = 0x01;
 
@@ -204,7 +242,7 @@ function buildSpendSkeleton(o: SpendOptions, lockTime: number) {
   }
   const branchId = branchIdAtHeight(o.net, o.tipHeight);
 
-  const txb = utxolib.bitgo.createTransactionBuilderForNetwork(network);
+  const txb = zcashBuilder(network);
   txb.setVersion(ZCASH_VERSION_SAPLING);
   txb.setVersionGroupId(ZCASH_VERSION_GROUP_ID_SAPLING);
   txb.setConsensusBranchId(branchId);
