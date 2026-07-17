@@ -99,10 +99,11 @@ export async function lockXus(
     },
   });
   const wire = toWireSignedTransaction(signed);
-  // The node deserializes `hashlock` as a JSON array of 32 bytes ([u8;32], no hex serde),
-  // while the SDK Borsh-SIGNS it from the hex string. Emit the byte array on the wire — the
-  // signature is over the same 32 bytes, so it still verifies and the tx-id is unchanged.
-  (wire.transaction.action as { hashlock?: unknown }).hashlock = Array.from(hl);
+  // As of the SOV v0.1.86 node, `htlc_lock.hashlock` is a Hash — its JSON serde is HEX,
+  // consistent with every other 32-byte field. The SDK already builds + Borsh-signs the
+  // action from the hex string, so the wire form carries hex and the node accepts it
+  // directly. (Pre-v0.1.86 nodes wanted a `[u8;32]` array here; that workaround is gone
+  // now that the whole mainnet fleet is v0.1.86.)
   const res = await client.submitTransaction(wire);
   return { txId: res.txId ?? signed.id, accepted: res.accepted };
 }
