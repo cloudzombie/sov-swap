@@ -152,6 +152,21 @@ export class Desk {
     return base / (1 + this.soldXus() / this.cfg.curveK);
   }
 
+  /**
+   * XUS delivered for `zecIn`, walking the marginal price along the sales curve — the
+   * exact inverse of `curveProjection`'s cumulative cost, so a swap pays out precisely
+   * what the displayed bonding curve says that ZEC buys. Solving
+   * `zec = p/base + (sold·p + p²/2)/(k·base)` for p gives the closed form below.
+   * K=0 (fixed rate) stays linear.
+   */
+  xusForZec(zecIn: number): number {
+    const base = this.cfg.rateXusPerZec;
+    const k = this.cfg.curveK;
+    if (k <= 0) return zecIn * base;
+    const b = 1 + this.soldXus() / k;
+    return k * (Math.sqrt(b * b + (2 * zecIn * base) / k) - b);
+  }
+
   quote(): Quote {
     return {
       rateXusPerZec: this.currentRate(),
@@ -223,9 +238,9 @@ export class Desk {
     if (zecAmt < this.cfg.minZec || zecAmt > this.cfg.maxZec) {
       throw new Error(`amount ${zecAmt} ZEC out of bounds [${this.cfg.minZec}, ${this.cfg.maxZec}]`);
     }
-    // Lock the CURRENT curve-adjusted rate into this swap's terms.
-    const rate = this.currentRate();
-    const xusOut = zecAmt * rate;
+    // Lock the curve-integrated payout into this swap's terms: the XUS this ZEC buys
+    // walking up the bonding curve, matching the displayed curve exactly.
+    const xusOut = this.xusForZec(zecAmt);
     const xusAmountGrains = (BigInt(Math.round(xusOut * 1e8)) * GRAINS_PER_XUS) / 100_000_000n;
 
     // Inventory check: don't quote a swap we can't fill.

@@ -412,7 +412,17 @@ export default function App() {
     setErr(null);
   }
 
-  const xusOut = quote ? (Number(amount) || 0) * quote.rateXusPerZec : 0;
+  // XUS received for the entered ZEC, walking up the bonding curve — the same
+  // closed-form inverse of the curve's cumulative cost that the desk locks into
+  // the swap terms, so this preview matches the chart and the payout exactly.
+  const zecIn = Number(amount) || 0;
+  const xusOut = quote
+    ? quote.curveK > 0
+      ? quote.curveK *
+        (Math.sqrt((1 + quote.soldXus / quote.curveK) ** 2 + (2 * zecIn * quote.baseRate) / quote.curveK) -
+          (1 + quote.soldXus / quote.curveK))
+      : zecIn * quote.baseRate
+    : 0;
 
   return (
     <div className="shell">
@@ -520,7 +530,9 @@ function QuoteForm({ quote, amount, setAmount, xusOut, onStart, busy, err }) {
           <label>You receive</label>
           <div className="you-get">
             <span className="n">{xusOut.toLocaleString(undefined, { maximumFractionDigits: 8 })} XUS</span>
-            <span className="l">at {quote ? quote.rateXusPerZec : "—"} XUS / ZEC</span>
+            <span className="l">
+              at {quote ? fmt(zecIn > 0 ? xusOut / zecIn : quote.rateXusPerZec, 6) : "—"} XUS / ZEC
+            </span>
           </div>
         </div>
 
