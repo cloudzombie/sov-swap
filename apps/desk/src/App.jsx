@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   newSecret,
-  newZecRefundKey,
+  newRefundKey,
+  coinTxUrl,
   newXusWallet,
   makeApi,
   claimXus,
@@ -150,6 +151,7 @@ function fmt(value, digits = 6) {
 }
 
 function BondingCurve({ quote }) {
+  const c = quote?.coin ?? "ZEC";
   const points = quote?.points || [];
   const [selected, setSelected] = useState(0);
   if (!quote || points.length < 2) return null;
@@ -176,15 +178,15 @@ function BondingCurve({ quote }) {
       <div className="curve-head">
         <div>
           <div className="eyebrow">Live desk inventory curve</div>
-          <h2 id="curve-title">XUS price in ZEC</h2>
+          <h2 id="curve-title">XUS price in {c}</h2>
         </div>
         <div className="buyout">
-          <span>ZEC to buy all {fmt(quote.inventoryXus, 2)} XUS</span>
-          <b>{fmt(quote.buyAllZec, 8)} ZEC</b>
+          <span>{c} to buy all {fmt(quote.inventoryXus, 2)} XUS</span>
+          <b>{fmt(quote.buyAllZec, 8)} {c}</b>
         </div>
       </div>
       <div className="curve-chart">
-        <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label={`Bonding curve from ${fmt(quote.currentZecPerXus, 8)} to ${fmt(quote.finalZecPerXus, 8)} ZEC per XUS`}>
+        <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label={`Bonding curve from ${fmt(quote.currentZecPerXus, 8)} to ${fmt(quote.finalZecPerXus, 8)} ${c} per XUS`}>
           <defs>
             <linearGradient id="curve-fill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="var(--gold)" stopOpacity=".28" />
@@ -216,9 +218,9 @@ function BondingCurve({ quote }) {
       />
       <div className="curve-readout" aria-live="polite">
         <div><span>Inventory bought</span><b>{fmt(chosen.purchasedXus, 2)} XUS</b></div>
-        <div><span>Marginal price</span><b>{fmt(chosen.zecPerXus, 8)} ZEC / XUS</b></div>
-        <div><span>Rate there</span><b>{fmt(chosen.xusPerZec, 4)} XUS / ZEC</b></div>
-        <div><span>Cumulative cost</span><b>{fmt(chosen.cumulativeZec, 8)} ZEC</b></div>
+        <div><span>Marginal price</span><b>{fmt(chosen.zecPerXus, 8)} {c} / XUS</b></div>
+        <div><span>Rate there</span><b>{fmt(chosen.xusPerZec, 4)} XUS / {c}</b></div>
+        <div><span>Cumulative cost</span><b>{fmt(chosen.cumulativeZec, 8)} {c}</b></div>
       </div>
       <p className="curve-note">
         Computed from the desk’s configured sales curve and live on-chain wallet balance. The total is
@@ -241,33 +243,36 @@ function TradeTape({ trades }) {
       {trades.length ? (
         <div className="tape-scroll">
           <div className="tape-grid tape-labels">
-            <span>Zcash transactions</span>
+            <span>Coin transactions</span>
             <span>XUS transaction</span>
             <span>Price paid</span>
           </div>
-          {trades.map((trade) => (
-            <article className="tape-grid trade-row" key={trade.id}>
-              <div className="tx-col">
-                <a href={`https://blockchair.com/zcash/transaction/${trade.zecFundingTxid}`} target="_blank" rel="noreferrer">
-                  <small>fund</small> {shorten(trade.zecFundingTxid, 7)}
-                </a>
-                <a href={`https://blockchair.com/zcash/transaction/${trade.zecSweepTxid}`} target="_blank" rel="noreferrer">
-                  <small>sweep</small> {shorten(trade.zecSweepTxid, 7)}
-                </a>
-                <b>{fmt(trade.zecAmount, 8)} ZEC</b>
-              </div>
-              <div className="tx-col">
-                <a href={`https://sovxus.org/tx/${trade.xusLockTxid}`} target="_blank" rel="noreferrer">
-                  <small>HTLC</small> {shorten(trade.xusLockTxid, 7)}
-                </a>
-                <b>{fmt(trade.xusAmount, 8)} XUS</b>
-              </div>
-              <div className="paid-col">
-                <b>{fmt(trade.xusPerZec, 6)} XUS / ZEC</b>
-                <span>{fmt(trade.zecPerXus, 8)} ZEC / XUS</span>
-              </div>
-            </article>
-          ))}
+          {trades.map((trade) => {
+            const c = trade.coin ?? "ZEC";
+            return (
+              <article className="tape-grid trade-row" key={trade.id}>
+                <div className="tx-col">
+                  <a href={coinTxUrl(c, trade.zecFundingTxid)} target="_blank" rel="noreferrer">
+                    <small>fund</small> {shorten(trade.zecFundingTxid, 7)}
+                  </a>
+                  <a href={coinTxUrl(c, trade.zecSweepTxid)} target="_blank" rel="noreferrer">
+                    <small>sweep</small> {shorten(trade.zecSweepTxid, 7)}
+                  </a>
+                  <b>{fmt(trade.zecAmount, 8)} {c}</b>
+                </div>
+                <div className="tx-col">
+                  <a href={`https://sovxus.org/#/tx/${trade.xusLockTxid}`} target="_blank" rel="noreferrer">
+                    <small>HTLC</small> {shorten(trade.xusLockTxid, 7)}
+                  </a>
+                  <b>{fmt(trade.xusAmount, 8)} XUS</b>
+                </div>
+                <div className="paid-col">
+                  <b>{fmt(trade.xusPerZec, 6)} XUS / {c}</b>
+                  <span>{fmt(trade.zecPerXus, 8)} {c} / XUS</span>
+                </div>
+              </article>
+            );
+          })}
         </div>
       ) : (
         <div className="tape-empty">Completed swaps will appear here after both on-chain legs settle.</div>
@@ -304,6 +309,7 @@ function Data({ k, v, tone, copy = true }) {
 
 export default function App() {
   const api = makeApi(COORD);
+  const [coin, setCoin] = useState("ZEC");
   const [quote, setQuote] = useState(null);
   const [amount, setAmount] = useState("0.05");
   const [active, setActive] = useState(() => loadActive());
@@ -313,17 +319,18 @@ export default function App() {
   const [trades, setTrades] = useState([]);
   const { price, hist } = usePrice(api);
 
-  // Load the quote (and keep the rate/inventory fresh).
+  // Load the quote for the selected coin (and keep the rate/inventory fresh).
   useEffect(() => {
     let alive = true;
-    const load = () => api.quote().then((q) => alive && setQuote(q)).catch(() => {});
+    setQuote(null); // never show one coin's numbers under another coin's tab
+    const load = () => api.quote(coin).then((q) => alive && setQuote(q)).catch(() => {});
     load();
     const t = setInterval(load, 20_000);
     return () => {
       alive = false;
       clearInterval(t);
     };
-  }, []); // eslint-disable-line
+  }, [coin]); // eslint-disable-line
 
   useEffect(() => {
     let alive = true;
@@ -352,28 +359,30 @@ export default function App() {
 
   async function startSwap() {
     setErr(null);
-    const zec = Number(amount);
-    if (!quote || !(zec >= quote.minZec && zec <= quote.maxZec)) {
-      setErr(`Enter an amount between ${quote?.minZec} and ${quote?.maxZec} ZEC.`);
+    const amt = Number(amount);
+    if (!quote || !(amt >= quote.minZec && amt <= quote.maxZec)) {
+      setErr(`Enter an amount between ${quote?.minZec} and ${quote?.maxZec} ${coin}.`);
       return;
     }
     setBusy(true);
     try {
       // Everything secret is minted here, in the browser.
       const { secretHex, hashlock } = newSecret();
-      const { zecPrivHex, zecRefundPubkey } = newZecRefundKey();
+      const { refundPrivHex, refundPubkey } = newRefundKey();
       const xus = newXusWallet();
       const created = await api.createSwap({
         hashlock,
-        zecRefundPubkey,
+        refundPubkey,
         xusRecipient: xus.account,
-        zecAmountZat: Math.round(zec * ZAT),
+        amountBaseUnits: Math.round(amt * ZAT),
+        coin,
       });
       const rec = {
         id: created.id,
+        coin,
         secretHex,
-        zecPrivHex,
-        zecRefundPubkey,
+        refundPrivHex,
+        refundPubkey,
         xusSeedHex: xus.xusSeedHex,
         account: xus.account,
       };
@@ -428,7 +437,7 @@ export default function App() {
     <div className="shell">
       <header className="topbar">
         <a className="brand" href="/">
-          <span className="mark">⚖</span> The Desk <small>· ZEC → XUS</small>
+          <span className="mark">⚖</span> The Desk <small>· {coin} → XUS</small>
         </a>
         <div className="badges">
           {quote && <span className="badge net">mainnet</span>}
@@ -440,11 +449,27 @@ export default function App() {
 
       <PriceTracker price={price} hist={hist} quote={quote} />
 
+      <div className="coin-tabs" role="tablist" aria-label="Coin you pay with">
+        {(quote?.coins ?? ["ZEC"]).map((c) => (
+          <button
+            key={c}
+            role="tab"
+            aria-selected={coin === c}
+            className={`coin-tab ${coin === c ? "on" : ""}`}
+            onClick={() => {
+              if (c !== coin) setCoin(c);
+            }}
+          >
+            {c} → XUS
+          </button>
+        ))}
+      </div>
+
       <section className="rate">
         <div>
           <div className="lede">Trustless atomic swap — no bridge, no custodian</div>
           <div className="pair">
-            <span className="big tick-zec">1 ZEC</span>
+            <span className="big tick-zec">1 {coin}</span>
             <span className="arrow">→</span>
             <span className="big tick-xus">{quote ? quote.rateXusPerZec.toLocaleString() : "—"} XUS</span>
           </div>
@@ -460,6 +485,7 @@ export default function App() {
       {!active ? (
         <QuoteForm
           quote={quote}
+          coin={coin}
           amount={amount}
           setAmount={setAmount}
           xusOut={xusOut}
@@ -497,12 +523,12 @@ export default function App() {
   );
 }
 
-function QuoteForm({ quote, amount, setAmount, xusOut, onStart, busy, err }) {
+function QuoteForm({ quote, coin, amount, setAmount, xusOut, onStart, busy, err }) {
   return (
     <div className="card fade-in">
       <div className="card-h">
         <h2>New swap</h2>
-        <span className="sub">you send ZEC, you receive XUS</span>
+        <span className="sub">you send {coin}, you receive XUS</span>
       </div>
       <div className="card-b">
         <div className="field">
@@ -515,12 +541,12 @@ function QuoteForm({ quote, amount, setAmount, xusOut, onStart, busy, err }) {
                 onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
                 placeholder="0.00"
               />
-              <span className="unit tick-zec">ZEC</span>
+              <span className="unit tick-zec">{coin}</span>
             </div>
           </div>
           {quote && (
             <div className="hint">
-              min {quote.minZec} · max {quote.maxZec} ZEC · desk pays out from{" "}
+              min {quote.minZec} · max {quote.maxZec} {coin} · desk pays out from{" "}
               <code>{shorten(quote.deskAccount, 6)}</code>
             </div>
           )}
@@ -531,7 +557,7 @@ function QuoteForm({ quote, amount, setAmount, xusOut, onStart, busy, err }) {
           <div className="you-get">
             <span className="n">{xusOut.toLocaleString(undefined, { maximumFractionDigits: 8 })} XUS</span>
             <span className="l">
-              at {quote ? fmt(Number(amount) > 0 ? xusOut / Number(amount) : quote.rateXusPerZec, 6) : "—"} XUS / ZEC
+              at {quote ? fmt(Number(amount) > 0 ? xusOut / Number(amount) : quote.rateXusPerZec, 6) : "—"} XUS / {coin}
             </span>
           </div>
         </div>
@@ -543,8 +569,8 @@ function QuoteForm({ quote, amount, setAmount, xusOut, onStart, busy, err }) {
           {busy ? "Preparing swap…" : "Start swap"}
         </button>
         <div className="hint" style={{ marginTop: 10 }}>
-          A fresh secret, a ZEC refund key, and a new XUS wallet are generated in your browser. Nothing
-          secret ever leaves this device.
+          A fresh secret, a {coin} refund key, and a new XUS wallet are generated in your browser.
+          Nothing secret ever leaves this device.
         </div>
       </div>
     </div>
@@ -592,13 +618,13 @@ function Ticket({ swap, active, onClaim, onReset, busy, err }) {
         ) : aborted ? (
           <div className="callout bad">
             This swap was not matched: {swap.note || "terms could not be honored"}. No XUS was ever
-            committed. If you already sent ZEC, reclaim it with your refund key after block{" "}
+            committed. If you already sent {swap.coin ?? "ZEC"}, reclaim it with your refund key after block{" "}
             <b className="mono">{swap.zecTimeoutHeight}</b> — recovery data is below.
           </div>
         ) : refunded ? (
           <div className="callout warn">
-            The desk reclaimed its XUS (you didn't claim in time). Reclaim your ZEC with your refund key
-            after block <b className="mono">{swap.zecTimeoutHeight}</b>.
+            The desk reclaimed its XUS (you didn't claim in time). Reclaim your {swap.coin ?? "ZEC"} with your
+            refund key after block <b className="mono">{swap.zecTimeoutHeight}</b>.
           </div>
         ) : (
           <ol className="spine">
@@ -626,21 +652,23 @@ function Ticket({ swap, active, onClaim, onReset, busy, err }) {
 
 function StepBody({ stage, idx, i, swap, active, onClaim, busy }) {
   if (i > idx) return null; // future step: header only
+  const c = swap.coin ?? active?.coin ?? "ZEC";
+  const chainName = c === "BTC" ? "Bitcoin" : "Zcash";
 
   if (stage === "fund" && idx === 0) {
     return (
       <div className="detail">
         <p>
-          Send exactly <b className="mono tick-zec">{zatToZec(swap.zecAmountZat)} ZEC</b> to this
+          Send exactly <b className="mono tick-zec">{zatToZec(swap.zecAmountZat)} {c}</b> to this
           one-time escrow address. It's a hash-timelock contract — only the secret in your browser can
           release it to the desk, and only your refund key can return it to you.
         </p>
-        <Data k="ZEC" v={swap.zecHtlcAddress} tone="steel" />
+        <Data k={c} v={swap.zecHtlcAddress} tone="steel" />
         <div className="safety">
           <span className="shield">🛡</span>
           <span>
-            Fully refundable to you after Zcash block <b>{swap.zecTimeoutHeight}</b> if the swap doesn't
-            complete. Waiting for your deposit to confirm…
+            Fully refundable to you after {chainName} block <b>{swap.zecTimeoutHeight}</b> if the swap
+            doesn't complete. Waiting for your deposit to confirm…
           </span>
         </div>
       </div>
@@ -651,7 +679,7 @@ function StepBody({ stage, idx, i, swap, active, onClaim, busy }) {
     return (
       <div className="detail">
         <p>
-          Your ZEC is confirmed. The desk is locking <b className="mono tick-xus">{grainsToXus(swap.xusAmountGrains)} XUS</b>{" "}
+          Your {c} is confirmed. The desk is locking <b className="mono tick-xus">{grainsToXus(swap.xusAmountGrains)} XUS</b>{" "}
           into a matching contract for you on Sovereign…
         </p>
       </div>
@@ -663,7 +691,7 @@ function StepBody({ stage, idx, i, swap, active, onClaim, busy }) {
       <div className="detail">
         <p>
           The desk has locked your XUS. Claim it now — this reveals your secret, which simultaneously
-          lets the desk take the ZEC. One click finishes both legs.
+          lets the desk take the {c}. One click finishes both legs.
         </p>
         <Data k="XUS HTLC" v={swap.deskXusHtlcId} copy />
         <button className="btn btn-gold" style={{ marginTop: 12 }} onClick={onClaim} disabled={busy}>
@@ -677,10 +705,11 @@ function StepBody({ stage, idx, i, swap, active, onClaim, busy }) {
 }
 
 function SettledView({ swap, active }) {
+  const c = swap.coin ?? active?.coin ?? "ZEC";
   return (
     <div className="fade-in">
       <div className="rail">
-        <span className="z">{zatToZec(swap.zecAmountZat)} ZEC</span>
+        <span className="z">{zatToZec(swap.zecAmountZat)} {c}</span>
         <span className="link" />
         <span className="x">{grainsToXus(swap.xusAmountGrains)} XUS</span>
       </div>
@@ -688,7 +717,7 @@ function SettledView({ swap, active }) {
         Done. Your XUS is in your new wallet — keep its seed (below) to spend it.
       </div>
       <Data k="XUS account" v={active.account} />
-      {swap.zecSweepTxid && <Data k="ZEC sweep" v={swap.zecSweepTxid} tone="steel" />}
+      {swap.zecSweepTxid && <Data k={`${c} sweep`} v={swap.zecSweepTxid} tone="steel" />}
       <div className="keybox">
         <h4>⚠ SAVE YOUR XUS WALLET SEED</h4>
         <p className="hint" style={{ marginTop: 0 }}>
@@ -702,15 +731,18 @@ function SettledView({ swap, active }) {
 }
 
 function Recovery({ active, swap }) {
+  const c = swap?.coin ?? active?.coin ?? "ZEC";
+  // Pre-BTC records saved the refund key under zecPrivHex.
+  const refundKey = active.refundPrivHex ?? active.zecPrivHex;
   return (
     <div className="keybox">
-      <h4>⚠ RECOVERY DATA — SAVE BEFORE SENDING ZEC</h4>
+      <h4>⚠ RECOVERY DATA — SAVE BEFORE SENDING {c}</h4>
       <p className="hint" style={{ marginTop: 0 }}>
-        Keep this until the swap completes. Your XUS wallet seed receives the XUS; your ZEC refund key
-        reclaims your ZEC if the swap fails.
+        Keep this until the swap completes. Your XUS wallet seed receives the XUS; your {c} refund key
+        reclaims your {c} if the swap fails.
       </p>
       <Data k="XUS seed" v={active.xusSeedHex} />
-      <Data k="ZEC refund key" v={active.zecPrivHex} tone="steel" />
+      <Data k={`${c} refund key`} v={refundKey} tone="steel" />
     </div>
   );
 }

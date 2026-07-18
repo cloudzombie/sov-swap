@@ -13,10 +13,22 @@
  */
 import { assertSafeTimeouts, SwapSafetyError, type ChainClock } from '../protocol.js';
 
-/** Everything committed when the swap is created — the terms both legs are built from. */
+/** Which UTXO coin the user's leg is on. Absent on records persisted before BTC
+ * support — read it as `terms.coin ?? 'ZEC'`. */
+export type SwapCoin = 'ZEC' | 'BTC';
+
+/** Everything committed when the swap is created — the terms both legs are built from.
+ *
+ * NAMING NOTE: the `zec…`-prefixed fields predate BTC support and denote the USER'S
+ * UTXO-COIN leg regardless of `coin` — for a BTC swap `zecHtlcAddress` holds the
+ * Bitcoin P2SH address, `zecAmountZat` holds satoshi, `zecTimeoutHeight` a Bitcoin
+ * height. Kept verbatim because they are persisted in every existing swap record;
+ * the machine's logic is coin-agnostic either way. */
 export interface SwapTerms {
   /** Opaque id for this swap (coordinator-assigned). */
   id: string;
+  /** The user's UTXO coin. Absent = 'ZEC' (pre-BTC records). */
+  coin?: SwapCoin;
   /** 32-byte SHA-256 hashlock, hex. The USER chose the secret; the desk only sees this. */
   hashlock: string;
   /** The P2SH address the user funds on Zcash. */

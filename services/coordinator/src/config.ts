@@ -18,6 +18,13 @@ export interface Config {
   curveK: number;
   minZec: number;
   maxZec: number;
+  /** BTC leg — OPTIONAL. Absent BTC_MM_WIF = the desk quotes ZEC only. When set, a base
+   * rate is REQUIRED (no invented default: BTC/XUS is the operator's price to state). */
+  btcMmWif: string | null;
+  btcSweepAddress: string | null;
+  rateXusPerBtc: number | null;
+  minBtc: number;
+  maxBtc: number;
   blockchairApiKey: string | null;
   httpPort: number;
   dataDir: string;
@@ -34,7 +41,19 @@ function opt(name: string, dflt: string): string {
 }
 
 export function loadConfig(): Config {
+  const btcMmWif = process.env.BTC_MM_WIF?.trim() || null;
+  const rateXusPerBtc = process.env.RATE_XUS_PER_BTC?.trim()
+    ? Number(process.env.RATE_XUS_PER_BTC)
+    : null;
+  if (btcMmWif && (!rateXusPerBtc || !(rateXusPerBtc > 0))) {
+    throw new Error('BTC_MM_WIF is set but RATE_XUS_PER_BTC is missing/invalid — refusing to quote BTC at a made-up rate');
+  }
   return {
+    btcMmWif,
+    btcSweepAddress: process.env.BTC_SWEEP_ADDRESS?.trim() || null,
+    rateXusPerBtc,
+    minBtc: Number(opt('MIN_BTC', '0.0001')),
+    maxBtc: Number(opt('MAX_BTC', '0.005')),
     net: 'mainnet',
     sovRpcUrl: req('SOV_RPC_URL'),
     sovMmSeedHex: req('SOV_MM_SEED_HEX'),

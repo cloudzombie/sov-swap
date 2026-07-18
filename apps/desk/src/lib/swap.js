@@ -24,12 +24,20 @@ export function newSecret() {
   return { secretHex: bytesToHex(secret), hashlock: bytesToHex(sha256(secret)) };
 }
 
-/** A fresh Zcash refund keypair — the key that can reclaim the ZEC if the swap fails.
- * Only the compressed pubkey goes to the desk; the private key stays with the user. */
-export function newZecRefundKey() {
+/** A fresh refund keypair for the coin chain (ZEC and BTC share secp256k1) — the key
+ * that can reclaim the user's coin if the swap fails. Only the compressed pubkey goes
+ * to the desk; the private key stays with the user. */
+export function newRefundKey() {
   const priv = secp.utils.randomPrivateKey();
   const pub = secp.getPublicKey(priv, true); // compressed
-  return { zecPrivHex: bytesToHex(priv), zecRefundPubkey: bytesToHex(pub) };
+  return { refundPrivHex: bytesToHex(priv), refundPubkey: bytesToHex(pub) };
+}
+
+/** Block-explorer URL for a transaction on the user's coin chain. */
+export function coinTxUrl(coin, txid) {
+  return coin === "BTC"
+    ? `https://mempool.space/tx/${txid}`
+    : `https://blockchair.com/zcash/transaction/${txid}`;
 }
 
 /** A fresh XUS wallet (hybrid PQ). We mint the 32-byte seed ourselves so it is always
@@ -51,8 +59,8 @@ export function makeApi(base) {
   const b = base.replace(/\/$/, "");
   return {
     base: b,
-    async quote() {
-      return (await fetch(`${b}/api/quote`)).json();
+    async quote(coin = "ZEC") {
+      return (await fetch(`${b}/api/quote?coin=${coin}`)).json();
     },
     async trades() {
       const r = await fetch(`${b}/api/trades`);

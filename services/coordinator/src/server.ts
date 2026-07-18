@@ -8,9 +8,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { loadConfig } from './config.js';
 import { SwapStore } from './store.js';
-import { Desk, type CreateSwapRequest } from './desk.js';
+import { Desk } from './desk.js';
 import { PriceService } from './price.js';
-import type { SwapState } from '@sov-swap/core';
+import type { SwapCoin, SwapState } from '@sov-swap/core';
 
 const cfg = loadConfig();
 const store = new SwapStore(cfg.dataDir);
@@ -21,6 +21,7 @@ const price = new PriceService(() => desk.currentRate(), cfg.dataDir);
 function publicView(s: SwapState) {
   return {
     id: s.terms.id,
+    coin: s.terms.coin ?? 'ZEC',
     phase: s.phase,
     net: cfg.net,
     zecHtlcAddress: s.terms.zecHtlcAddress,
@@ -58,6 +59,15 @@ async function readBody(req: IncomingMessage): Promise<any> {
   return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
 }
 
+/** The validated ?coin= query param, or null when absent. Throws on unknown coins. */
+function coinParam(url: URL): SwapCoin | null {
+  const c = url.searchParams.get('coin');
+  if (!c) return null;
+  const up = c.toUpperCase() as SwapCoin;
+  if (!desk.coins().includes(up)) throw new Error(`unknown coin ${c}`);
+  return up;
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
   try {
@@ -82,15 +92,16 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/api/quote') {
-      const q = desk.quote();
-      const curve = await desk.curveProjection();
-      return send(res, 200, { ...q, deskAccount: desk.xusAccount(), ...curve });
+      const coin = coinParam(url) ?? 'ZEC';
+      const q = desk.quote(coin);
+      const curve = await desk.curveProjection(41, coin);
+      return send(res, 200, { ...q, deskAccount: desk.xusAccount(), ...curve, coins: desk.coins() });
     }
 
     // The live bonding curve across every XUS currently held by the desk.
     if (req.method === 'GET' && url.pathname === '/api/curve') {
       const n = Number(url.searchParams.get('points')) || 81;
-      return send(res, 200, await desk.curveProjection(n));
+      return send(res, 200, await desk.curveProjection(n, coinParam(url) ?? 'ZEC'));
     }
 
     // Public tape: successful swaps only. These records exist only after the ZEC funding
@@ -112,6 +123,7 @@ const server = createServer(async (req, res) => {
           const xusAmount = Number(BigInt(s.terms.xusAmountGrains)) / 100_000_000;
           return {
             id: s.terms.id,
+            coin: s.terms.coin ?? 'ZEC',
             createdAt: s.createdAt ?? null,
             zecAmount,
             xusAmount,
@@ -139,11 +151,22 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/api/swap') {
-      const body = (await readBody(req)) as CreateSwapRequest;
-      for (const f of ['hashlock', 'zecRefundPubkey', 'xusRecipient', 'zecAmountZat'] as const) {
-        if (body[f] === undefined) return send(res, 400, { error: `missing field ${f}` });
+      const body = await readBody(req);
+      // Field aliases: the pre-BTC client sent zec-named fields; accept both forms.
+      const reqBody = {
+        hashlock: body.hashlock,
+        refundPubkey: body.refundPubkey ?? body.zecRefundPubkey,
+        xusRecipient: body.xusRecipient,
+        amountBaseUnits: body.amountBaseUnits ?? body.zecAmountZat,
+        coin: (body.coin ?? 'ZEC') as SwapCoin,
+      };
+      for (const f of ['hashlock', 'refundPubkey', 'xusRecipient', 'amountBaseUnits'] as const) {
+        if (reqBody[f] === undefined) return send(res, 400, { error: `missing field ${f}` });
       }
-      const s = await desk.createSwap(body);
+      if (!desk.coins().includes(reqBody.coin)) {
+        return send(res, 400, { error: `coin ${reqBody.coin} not enabled on this desk` });
+      }
+      const s = await desk.createSwap(reqBody);
       return send(res, 201, publicView(s));
     }
 
@@ -176,6 +199,9 @@ async function pollLoop(): Promise<void> {
 server.listen(cfg.httpPort, () => {
   console.log(`[coordinator] ${cfg.net} desk listening on :${cfg.httpPort}`);
   console.log(`[coordinator] XUS inventory account ${desk.xusAccount()}`);
-  console.log(`[coordinator] rate ${cfg.rateXusPerZec} XUS / ZEC, bounds ${cfg.minZec}–${cfg.maxZec} ZEC`);
+  for (const coin of desk.coins()) {
+    const q = desk.quote(coin);
+    console.log(`[coordinator] ${coin}: base ${q.baseRate} XUS / ${coin}, bounds ${q.minZec}–${q.maxZec} ${coin}`);
+  }
   void pollLoop();
 });

@@ -483,3 +483,34 @@ button { font-family: inherit; }
   .curve-readout div:nth-child(2) { border-right: 0; }
   .curve-readout div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
 }
+
+/* ── coin tabs (ZEC | BTC) ────────────────────────────────────────────────── */
+.coin-tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 4px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.coin-tab {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 7px 16px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.coin-tab:hover { color: var(--ink-soft); }
+.coin-tab.on {
+  color: var(--gold);
+  border-color: var(--line-2);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  box-shadow: var(--shadow-sm);
+}
