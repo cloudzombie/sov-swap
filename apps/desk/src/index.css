@@ -514,3 +514,45 @@ button { font-family: inherit; }
   background: linear-gradient(180deg, var(--panel-2), var(--panel));
   box-shadow: var(--shadow-sm);
 }
+
+/* ── claim heartbeat ─────────────────────────────────────────────────────── */
+.claim-hb {
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--paper-2);
+  padding: 14px 16px;
+  margin-bottom: 4px;
+}
+.hb-head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+.hb-head b { font-size: 13px; letter-spacing: 0.01em; }
+.hb-clock { margin-left: auto; color: var(--muted); font-size: 12px; }
+.hb-beat {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--gold);
+  animation: hb-thump 1.1s ease-in-out infinite;
+}
+@keyframes hb-thump {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 var(--gold-glow); }
+  30% { transform: scale(1.25); box-shadow: 0 0 0 7px rgba(244, 200, 63, 0); }
+}
+.hb-step {
+  display: flex; gap: 11px; align-items: flex-start;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+.hb-node {
+  flex: 0 0 18px; text-align: center;
+  font-family: var(--mono); font-size: 12px; line-height: 1.6;
+}
+.hb-step.done .hb-node { color: var(--good); }
+.hb-step.pending { opacity: 0.45; }
+.hb-pulse {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--gold); animation: hb-thump 1.1s ease-in-out infinite;
+}
+.hb-label { font-size: 13px; }
+.hb-step.done .hb-label { color: var(--ink-soft); }
+.hb-step.live .hb-label { color: var(--ink); }
+.hb-body { margin-top: 2px; font-size: 11.5px; color: var(--steel); }
+.hb-body a { color: var(--steel); text-decoration: none; }
+.hb-body a:hover { text-decoration: underline; }

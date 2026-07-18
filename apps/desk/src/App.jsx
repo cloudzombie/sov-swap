@@ -353,9 +353,9 @@ export default function App() {
   useEffect(() => {
     if (!active?.id) return;
     poll();
-    const t = setInterval(poll, 5000);
+    const t = setInterval(poll, active?.claimTxid ? 2500 : 5000);
     return () => clearInterval(t);
-  }, [active?.id, poll]);
+  }, [active?.id, active?.claimTxid, poll]);
 
   async function startSwap() {
     setErr(null);
@@ -400,12 +400,17 @@ export default function App() {
     setErr(null);
     setBusy(true);
     try {
-      await claimXus(api, {
+      const txid = await claimXus(api, {
         deskXusHtlcId: swap.deskXusHtlcId,
         secretHex: active.secretHex,
         xusSeedHex: active.xusSeedHex,
         account: active.account,
       });
+      // The moment the chain accepted the broadcast: stamp it, persist it (survives
+      // reloads), and let the claim heartbeat take over the ticket.
+      const rec = { ...active, claimTxid: String(txid), claimAt: Date.now() };
+      saveActive(rec);
+      setActive(rec);
       await poll();
     } catch (e) {
       setErr(`Claim failed: ${e.message}`);
@@ -577,6 +582,8 @@ function QuoteForm({ quote, coin, amount, setAmount, xusOut, onStart, busy, err 
   );
 }
 
+const swept = (swap) => swap?.phase === "zec_swept";
+
 function Ticket({ swap, active, onClaim, onReset, busy, err }) {
   const phase = swap?.phase || "awaiting_zec_lock";
   const idx = stageIndex(phase);
@@ -613,7 +620,12 @@ function Ticket({ swap, active, onClaim, onReset, busy, err }) {
         <span className="sub mono">{shorten(active.id, 6)}</span>
       </div>
       <div className="card-b">
-        {settled ? (
+        {active.claimTxid ? (
+          <>
+            <ClaimProgress api={makeApi(COORD)} swap={swap} active={active} />
+            {swept(swap) && <SettledView swap={swap} active={active} />}
+          </>
+        ) : settled ? (
           <SettledView swap={swap} active={active} />
         ) : aborted ? (
           <div className="callout bad">
@@ -702,6 +714,95 @@ function StepBody({ stage, idx, i, swap, active, onClaim, busy }) {
   }
 
   return null;
+}
+
+/**
+ * The claim heartbeat — live, unambiguous feedback from the instant the claim tx is
+ * broadcast until the swap is fully settled. Three verifiable stages, each flipping
+ * green on REAL on-chain evidence: (1) the claim txid the chain accepted, (2) the XUS
+ * balance actually landing in the user's new wallet (polled every 2.5s straight from
+ * the chain through the desk's RPC tunnel), (3) the desk's sweep tx on the coin chain.
+ */
+function ClaimProgress({ api, swap, active }) {
+  const [balanceGrains, setBalanceGrains] = useState(null);
+  const [nowTs, setNowTs] = useState(Date.now());
+  const expectGrains = BigInt(swap.xusAmountGrains ?? 0);
+  const arrived = balanceGrains !== null && BigInt(balanceGrains) >= expectGrains;
+  const swept = swap.phase === "zec_swept" && !!swap.zecSweepTxid;
+  const c = swap.coin ?? active?.coin ?? "ZEC";
+
+  useEffect(() => {
+    let alive = true;
+    const client = api.sovClient();
+    const tick = () =>
+      client.getBalance(active.account).then((b) => alive && setBalanceGrains(b)).catch(() => {});
+    tick();
+    const t = setInterval(tick, 2500);
+    const clock = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+      clearInterval(clock);
+    };
+  }, [active.account]); // eslint-disable-line
+
+  const secs = Math.max(0, Math.floor((nowTs - (active.claimAt ?? nowTs)) / 1000));
+  const steps = [
+    {
+      key: "broadcast",
+      done: true,
+      label: "Claim broadcast — accepted by the chain",
+      body: (
+        <a href={`https://sovxus.org/#/tx/${active.claimTxid}`} target="_blank" rel="noreferrer" className="mono">
+          {shorten(active.claimTxid, 8)} ↗
+        </a>
+      ),
+    },
+    {
+      key: "arrive",
+      done: arrived,
+      label: arrived
+        ? `${grainsToXus(swap.xusAmountGrains)} XUS is in your wallet`
+        : "XUS landing in your wallet…",
+      body: (
+        <span className="mono">
+          {balanceGrains !== null ? `balance ${grainsToXus(balanceGrains)} XUS` : "reading balance…"}
+        </span>
+      ),
+    },
+    {
+      key: "sweep",
+      done: swept,
+      label: swept
+        ? `Desk swept the ${c} — swap complete`
+        : `Desk sweeping the ${c} with your revealed secret…`,
+      body: swept ? (
+        <a href={coinTxUrl(c, swap.zecSweepTxid)} target="_blank" rel="noreferrer" className="mono">
+          {shorten(swap.zecSweepTxid, 8)} ↗
+        </a>
+      ) : null,
+    },
+  ];
+  const activeIdx = steps.findIndex((st) => !st.done);
+
+  return (
+    <div className="claim-hb" role="status" aria-live="polite">
+      <div className="hb-head">
+        <span className="hb-beat" aria-hidden="true" />
+        <b>{swept ? "Settled" : "Settling"}</b>
+        <span className="hb-clock mono">{Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")}</span>
+      </div>
+      {steps.map((st, i) => (
+        <div key={st.key} className={`hb-step ${st.done ? "done" : i === activeIdx ? "live" : "pending"}`}>
+          <span className="hb-node">{st.done ? "✓" : i === activeIdx ? <span className="hb-pulse" /> : "·"}</span>
+          <div>
+            <div className="hb-label">{st.label}</div>
+            {st.body && <div className="hb-body">{st.body}</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function SettledView({ swap, active }) {
