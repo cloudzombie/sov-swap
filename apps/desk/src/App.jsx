@@ -531,7 +531,7 @@ function QuoteForm({ quote, amount, setAmount, xusOut, onStart, busy, err }) {
           <div className="you-get">
             <span className="n">{xusOut.toLocaleString(undefined, { maximumFractionDigits: 8 })} XUS</span>
             <span className="l">
-              at {quote ? fmt(zecIn > 0 ? xusOut / zecIn : quote.rateXusPerZec, 6) : "—"} XUS / ZEC
+              at {quote ? fmt(Number(amount) > 0 ? xusOut / Number(amount) : quote.rateXusPerZec, 6) : "—"} XUS / ZEC
             </span>
           </div>
         </div>
