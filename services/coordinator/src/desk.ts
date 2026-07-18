@@ -41,6 +41,7 @@ import {
   type ChainClock,
 } from '@sov-swap/core';
 import type { Config } from './config.js';
+import type { CrossRateService } from './crossrate.js';
 import { ZAT_PER_ZEC, GRAINS_PER_XUS } from './config.js';
 import type { SwapStore } from './store.js';
 
@@ -66,8 +67,10 @@ interface CoinLeg {
   };
   key: any; // secp256k1 ECPair (desk claimant key on this chain)
   sweepAddress: string;
-  /** Starting XUS per 1 coin — this coin's base quote before the shared sales curve. */
-  baseRate: number;
+  /** Starting XUS per 1 coin — this coin's base quote before the shared sales curve.
+   * Returns null when the coin's pricing is UNAVAILABLE (e.g. a stale auto-cross-rate);
+   * an unavailable coin is not quoted at all — fail closed, never quote stale. */
+  baseRate: () => number | null;
   min: number;
   max: number;
   blockTimeSec: number;
@@ -139,6 +142,8 @@ export class Desk {
   constructor(
     private readonly cfg: Config,
     private readonly store: SwapStore,
+    /** Present when AUTO_CROSS_RATE is on — drives the BTC leg's base rate. */
+    private readonly crossRate: CrossRateService | null = null,
   ) {
     this.sov = new SovClient({ endpoint: cfg.sovRpcUrl });
     this.xusKey = HybridKeypair.fromSeed(Buffer.from(cfg.sovMmSeedHex, 'hex'));
@@ -162,7 +167,7 @@ export class Desk {
           zecNetwork.pubKeyHash,
           zecNetwork,
         ),
-      baseRate: cfg.rateXusPerZec,
+      baseRate: () => cfg.rateXusPerZec,
       min: cfg.minZec,
       max: cfg.maxZec,
       blockTimeSec: ZEC_BLOCK_TIME_SEC,
@@ -197,7 +202,7 @@ export class Desk {
             utxolib.networks.bitcoin.pubKeyHash,
             utxolib.networks.bitcoin,
           ),
-        baseRate: cfg.rateXusPerBtc,
+        baseRate: () => (this.crossRate ? this.crossRate.current() : cfg.rateXusPerBtc),
         min: cfg.minBtc,
         max: cfg.maxBtc,
         blockTimeSec: BTC_BLOCK_TIME_SEC,
@@ -221,15 +226,23 @@ export class Desk {
     }
   }
 
-  /** The coins this desk is quoting. */
+  /** The coins this desk is quoting RIGHT NOW (a coin with unavailable pricing —
+   * e.g. a stale auto-cross-rate — drops out until pricing recovers). */
   coins(): SwapCoin[] {
-    return [...this.legs.keys()];
+    return [...this.legs.values()].filter((l) => l.baseRate() !== null).map((l) => l.coin);
   }
 
   private leg(coin: SwapCoin): CoinLeg {
     const l = this.legs.get(coin);
     if (!l) throw new Error(`${coin} swaps are not enabled on this desk`);
     return l;
+  }
+
+  /** This coin's live base rate; throws rather than price from nothing. */
+  private baseRateOf(coin: SwapCoin): number {
+    const r = this.leg(coin).baseRate();
+    if (r === null) throw new Error(`${coin} pricing is unavailable (stale cross-rate) — quoting is paused`);
+    return r;
   }
 
   private legOf(s: SwapState): CoinLeg {
@@ -258,7 +271,7 @@ export class Desk {
    * that must sell to halve the rate (double the price). `CURVE_K=0` disables it.
    */
   currentRate(coin: SwapCoin = 'ZEC'): number {
-    const base = this.leg(coin).baseRate;
+    const base = this.baseRateOf(coin);
     if (this.cfg.curveK <= 0) return base;
     return base / (1 + this.soldXus() / this.cfg.curveK);
   }
@@ -271,7 +284,7 @@ export class Desk {
    * K=0 (fixed rate) stays linear.
    */
   xusFor(amountIn: number, coin: SwapCoin = 'ZEC'): number {
-    const base = this.leg(coin).baseRate;
+    const base = this.baseRateOf(coin);
     const k = this.cfg.curveK;
     if (k <= 0) return amountIn * base;
     const b = 1 + this.soldXus() / k;
@@ -283,7 +296,7 @@ export class Desk {
     return {
       coin,
       rateXusPerZec: this.currentRate(coin),
-      baseRate: leg.baseRate,
+      baseRate: this.baseRateOf(coin),
       soldXus: this.soldXus(),
       curveK: this.cfg.curveK,
       minZec: leg.min,
@@ -307,7 +320,7 @@ export class Desk {
   async curveProjection(pointCount = 41, coin: SwapCoin = 'ZEC'): Promise<CurveProjection> {
     const inventoryXus = await this.inventoryXus();
     const sold = this.soldXus();
-    const base = this.leg(coin).baseRate;
+    const base = this.baseRateOf(coin);
     const k = this.cfg.curveK;
     const count = Math.max(2, Math.min(201, Math.floor(pointCount)));
 

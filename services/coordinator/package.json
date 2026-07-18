@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@sov-swap/core": "*",
@@ -17,6 +18,7 @@
   },
   "devDependencies": {
     "typescript": "^5.6.0",
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "vitest": "^2.1.0"
   }
 }

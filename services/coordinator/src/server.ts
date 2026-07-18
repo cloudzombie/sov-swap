@@ -9,12 +9,27 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { loadConfig } from './config.js';
 import { SwapStore } from './store.js';
 import { Desk } from './desk.js';
+import { CrossRateService } from './crossrate.js';
 import { PriceService } from './price.js';
 import type { SwapCoin, SwapState } from '@sov-swap/core';
 
 const cfg = loadConfig();
 const store = new SwapStore(cfg.dataDir);
-const desk = new Desk(cfg, store);
+const crossRate =
+  cfg.autoCrossRate && cfg.rateXusPerBtc
+    ? new CrossRateService(
+        cfg.rateXusPerZec,
+        cfg.rateXusPerBtc,
+        {
+          floor: cfg.btcRateFloor!,
+          ceil: cfg.btcRateCeil!,
+          maxStepPct: cfg.btcRateMaxStepPct,
+          staleAfterMs: cfg.btcRateStaleMin * 60_000,
+        },
+        cfg.dataDir,
+      )
+    : null;
+const desk = new Desk(cfg, store, crossRate);
 const price = new PriceService(() => desk.currentRate(), cfg.dataDir);
 
 /** Public view of a swap — only what the browser needs, no internal bookkeeping. */
@@ -187,6 +202,7 @@ const POLL_MS = 15_000;
 async function pollLoop(): Promise<void> {
   for (;;) {
     try {
+      await crossRate?.update();
       await desk.tick();
       await price.maybeSample();
     } catch (e) {

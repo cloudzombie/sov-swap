@@ -25,6 +25,13 @@ export interface Config {
   rateXusPerBtc: number | null;
   minBtc: number;
   maxBtc: number;
+  /** Bounded auto-cross-rate: track RATE_XUS_PER_ZEC × market BTC/ZEC inside hard
+   * bounds; stale feed = BTC quoting pauses (fail closed). Off = static rate. */
+  autoCrossRate: boolean;
+  btcRateFloor: number | null;
+  btcRateCeil: number | null;
+  btcRateMaxStepPct: number;
+  btcRateStaleMin: number;
   blockchairApiKey: string | null;
   httpPort: number;
   dataDir: string;
@@ -48,7 +55,31 @@ export function loadConfig(): Config {
   if (btcMmWif && (!rateXusPerBtc || !(rateXusPerBtc > 0))) {
     throw new Error('BTC_MM_WIF is set but RATE_XUS_PER_BTC is missing/invalid — refusing to quote BTC at a made-up rate');
   }
+  const autoCrossRate = /^(1|true|yes)$/i.test(process.env.AUTO_CROSS_RATE?.trim() ?? '');
+  // Hard bounds default to a generous corridor around the operator's stated rate — they
+  // are the wall a poisoned feed cannot pass, not a day-to-day trading range.
+  const btcRateFloor = process.env.BTC_RATE_FLOOR?.trim()
+    ? Number(process.env.BTC_RATE_FLOOR)
+    : rateXusPerBtc
+      ? rateXusPerBtc * 0.5
+      : null;
+  const btcRateCeil = process.env.BTC_RATE_CEIL?.trim()
+    ? Number(process.env.BTC_RATE_CEIL)
+    : rateXusPerBtc
+      ? rateXusPerBtc * 2
+      : null;
+  if (autoCrossRate) {
+    if (!btcMmWif) throw new Error('AUTO_CROSS_RATE needs the BTC leg (BTC_MM_WIF) enabled');
+    if (!(btcRateFloor! > 0) || !(btcRateCeil! > btcRateFloor!)) {
+      throw new Error('AUTO_CROSS_RATE needs sane bounds: 0 < BTC_RATE_FLOOR < BTC_RATE_CEIL');
+    }
+  }
   return {
+    autoCrossRate,
+    btcRateFloor,
+    btcRateCeil,
+    btcRateMaxStepPct: Number(opt('BTC_RATE_MAX_STEP_PCT', '10')),
+    btcRateStaleMin: Number(opt('BTC_RATE_STALE_MIN', '15')),
     btcMmWif,
     btcSweepAddress: process.env.BTC_SWEEP_ADDRESS?.trim() || null,
     rateXusPerBtc,
