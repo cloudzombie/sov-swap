@@ -82,8 +82,47 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/api/quote') {
-      const [q, inv] = [desk.quote(), await desk.inventoryXus()];
-      return send(res, 200, { ...q, deskAccount: desk.xusAccount(), inventoryXus: inv });
+      const q = desk.quote();
+      const curve = await desk.curveProjection();
+      return send(res, 200, { ...q, deskAccount: desk.xusAccount(), ...curve });
+    }
+
+    // The live bonding curve across every XUS currently held by the desk.
+    if (req.method === 'GET' && url.pathname === '/api/curve') {
+      const n = Number(url.searchParams.get('points')) || 81;
+      return send(res, 200, await desk.curveProjection(n));
+    }
+
+    // Public tape: successful swaps only. These records exist only after the ZEC funding
+    // output was confirmed, the XUS HTLC was observed/claimed on SOV, and the desk's ZEC
+    // sweep was accepted for broadcast. Failed, pending, and refunded attempts never leak
+    // into the tape.
+    if (req.method === 'GET' && url.pathname === '/api/trades') {
+      const trades = store
+        .all()
+        .filter(
+          (s) =>
+            s.phase === 'zec_swept' &&
+            s.zecFundingUtxo?.txid &&
+            s.zecSweepTxid &&
+            s.deskXusHtlcId,
+        )
+        .map((s) => {
+          const zecAmount = s.terms.zecAmountZat / 100_000_000;
+          const xusAmount = Number(BigInt(s.terms.xusAmountGrains)) / 100_000_000;
+          return {
+            id: s.terms.id,
+            createdAt: s.createdAt ?? null,
+            zecAmount,
+            xusAmount,
+            xusPerZec: xusAmount / zecAmount,
+            zecPerXus: zecAmount / xusAmount,
+            zecFundingTxid: s.zecFundingUtxo!.txid,
+            zecSweepTxid: s.zecSweepTxid,
+            xusLockTxid: s.deskXusHtlcId,
+          };
+        });
+      return send(res, 200, { trades });
     }
 
     // Live XUS reference price (ZEC/USD ÷ the desk rate).

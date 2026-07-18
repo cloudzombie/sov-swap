@@ -71,6 +71,25 @@ export interface Quote {
   net: string;
 }
 
+export interface CurvePoint {
+  /** Additional desk inventory purchased from the current state. */
+  purchasedXus: number;
+  /** Marginal exchange rate at this point on the curve. */
+  xusPerZec: number;
+  /** Marginal price of one XUS at this point. */
+  zecPerXus: number;
+  /** Total ZEC spent to reach this point along the continuous curve. */
+  cumulativeZec: number;
+}
+
+export interface CurveProjection {
+  points: CurvePoint[];
+  inventoryXus: number;
+  buyAllZec: number;
+  currentZecPerXus: number;
+  finalZecPerXus: number;
+}
+
 export class Desk {
   private readonly sov: SovClient;
   private readonly zec: ZcashChain;
@@ -149,6 +168,48 @@ export class Desk {
   async inventoryXus(): Promise<number> {
     const bal = await this.sov.getBalance(this.xusAccount());
     return Number(BigInt(bal) / GRAINS_PER_XUS);
+  }
+
+  /**
+   * Project the configured sales curve across the desk's LIVE wallet inventory.
+   *
+   * The swap engine sells at `base / (1 + sold/K)` XUS per ZEC. Treating purchases as
+   * continuous gives dZEC/dXUS = (1 + sold/K) / base; integrating that marginal price
+   * produces the exact area under the displayed curve and the ZEC required to exhaust
+   * the wallet. Fixed-rate desks are the K=0 special case.
+   */
+  async curveProjection(pointCount = 41): Promise<CurveProjection> {
+    const inventoryXus = await this.inventoryXus();
+    const sold = this.soldXus();
+    const base = this.cfg.rateXusPerZec;
+    const k = this.cfg.curveK;
+    const count = Math.max(2, Math.min(201, Math.floor(pointCount)));
+
+    const marginalPrice = (purchased: number): number =>
+      k > 0 ? (1 + (sold + purchased) / k) / base : 1 / base;
+    const cumulativeCost = (purchased: number): number =>
+      k > 0
+        ? purchased / base + (sold * purchased + (purchased * purchased) / 2) / (k * base)
+        : purchased / base;
+
+    const points = Array.from({ length: count }, (_, i) => {
+      const purchasedXus = inventoryXus * (i / (count - 1));
+      const zecPerXus = marginalPrice(purchasedXus);
+      return {
+        purchasedXus,
+        zecPerXus,
+        xusPerZec: 1 / zecPerXus,
+        cumulativeZec: cumulativeCost(purchasedXus),
+      };
+    });
+
+    return {
+      points,
+      inventoryXus,
+      buyAllZec: cumulativeCost(inventoryXus),
+      currentZecPerXus: marginalPrice(0),
+      finalZecPerXus: marginalPrice(inventoryXus),
+    };
   }
 
   /**

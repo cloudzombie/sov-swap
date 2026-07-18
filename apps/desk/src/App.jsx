@@ -145,6 +145,137 @@ function PriceTracker({ price, hist, quote }) {
   );
 }
 
+function fmt(value, digits = 6) {
+  return Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
+}
+
+function BondingCurve({ quote }) {
+  const points = quote?.points || [];
+  const [selected, setSelected] = useState(0);
+  if (!quote || points.length < 2) return null;
+
+  const w = 560;
+  const h = 220;
+  const pad = { l: 58, r: 16, t: 18, b: 40 };
+  const plotW = w - pad.l - pad.r;
+  const plotH = h - pad.t - pad.b;
+  const maxX = Math.max(quote.inventoryXus, 1);
+  const prices = points.map((p) => p.zecPerXus);
+  const minY = Math.min(...prices);
+  const maxY = Math.max(...prices);
+  const ySpan = maxY - minY || Math.max(maxY * 0.1, 1e-8);
+  const x = (v) => pad.l + (v / maxX) * plotW;
+  const y = (v) => pad.t + plotH - ((v - minY) / ySpan) * plotH;
+  const path = points.map((p, i) => `${i ? "L" : "M"}${x(p.purchasedXus).toFixed(2)},${y(p.zecPerXus).toFixed(2)}`).join(" ");
+  const chosen = points[Math.min(points.length - 1, Math.round((selected / 100) * (points.length - 1)))];
+  const cx = x(chosen.purchasedXus);
+  const cy = y(chosen.zecPerXus);
+
+  return (
+    <section className="curve-card" aria-labelledby="curve-title">
+      <div className="curve-head">
+        <div>
+          <div className="eyebrow">Live desk inventory curve</div>
+          <h2 id="curve-title">XUS price in ZEC</h2>
+        </div>
+        <div className="buyout">
+          <span>ZEC to buy all {fmt(quote.inventoryXus, 2)} XUS</span>
+          <b>{fmt(quote.buyAllZec, 8)} ZEC</b>
+        </div>
+      </div>
+      <div className="curve-chart">
+        <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label={`Bonding curve from ${fmt(quote.currentZecPerXus, 8)} to ${fmt(quote.finalZecPerXus, 8)} ZEC per XUS`}>
+          <defs>
+            <linearGradient id="curve-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--gold)" stopOpacity=".28" />
+              <stop offset="100%" stopColor="var(--gold)" stopOpacity=".015" />
+            </linearGradient>
+          </defs>
+          {[0, 0.5, 1].map((t) => {
+            const gy = pad.t + plotH * t;
+            return <line key={t} x1={pad.l} x2={w - pad.r} y1={gy} y2={gy} className="curve-grid" />;
+          })}
+          <path d={`${path} L${x(maxX)},${pad.t + plotH} L${pad.l},${pad.t + plotH} Z`} fill="url(#curve-fill)" />
+          <path d={path} className="curve-line" />
+          <line x1={cx} x2={cx} y1={cy} y2={pad.t + plotH} className="curve-guide" />
+          <circle cx={cx} cy={cy} r="5" className="curve-dot" />
+          <text x={pad.l - 8} y={pad.t + 4} className="axis-y" textAnchor="end">{fmt(maxY, 8)}</text>
+          <text x={pad.l - 8} y={pad.t + plotH + 4} className="axis-y" textAnchor="end">{fmt(minY, 8)}</text>
+          <text x={pad.l} y={h - 10} className="axis-x">0 XUS</text>
+          <text x={w - pad.r} y={h - 10} className="axis-x" textAnchor="end">{fmt(quote.inventoryXus, 2)} XUS bought</text>
+        </svg>
+      </div>
+      <input
+        className="curve-scrub"
+        type="range"
+        min="0"
+        max="100"
+        value={selected}
+        onChange={(e) => setSelected(Number(e.target.value))}
+        aria-label="Inspect the bonding curve"
+      />
+      <div className="curve-readout" aria-live="polite">
+        <div><span>Inventory bought</span><b>{fmt(chosen.purchasedXus, 2)} XUS</b></div>
+        <div><span>Marginal price</span><b>{fmt(chosen.zecPerXus, 8)} ZEC / XUS</b></div>
+        <div><span>Rate there</span><b>{fmt(chosen.xusPerZec, 4)} XUS / ZEC</b></div>
+        <div><span>Cumulative cost</span><b>{fmt(chosen.cumulativeZec, 8)} ZEC</b></div>
+      </div>
+      <p className="curve-note">
+        Computed from the desk’s configured sales curve and live on-chain wallet balance. The total is
+        the area under the marginal-price curve; network fees are not included.
+      </p>
+    </section>
+  );
+}
+
+function TradeTape({ trades }) {
+  return (
+    <section className="tape-card" aria-labelledby="tape-title">
+      <div className="tape-head">
+        <div>
+          <div className="eyebrow">On-chain proof</div>
+          <h2 id="tape-title">Verified swap transactions</h2>
+        </div>
+        <span className="verified-pill"><span className="dot" /> {trades.length} completed</span>
+      </div>
+      {trades.length ? (
+        <div className="tape-scroll">
+          <div className="tape-grid tape-labels">
+            <span>Zcash transactions</span>
+            <span>XUS transaction</span>
+            <span>Price paid</span>
+          </div>
+          {trades.map((trade) => (
+            <article className="tape-grid trade-row" key={trade.id}>
+              <div className="tx-col">
+                <a href={`https://blockchair.com/zcash/transaction/${trade.zecFundingTxid}`} target="_blank" rel="noreferrer">
+                  <small>fund</small> {shorten(trade.zecFundingTxid, 7)}
+                </a>
+                <a href={`https://blockchair.com/zcash/transaction/${trade.zecSweepTxid}`} target="_blank" rel="noreferrer">
+                  <small>sweep</small> {shorten(trade.zecSweepTxid, 7)}
+                </a>
+                <b>{fmt(trade.zecAmount, 8)} ZEC</b>
+              </div>
+              <div className="tx-col">
+                <a href={`https://sovxus.org/tx/${trade.xusLockTxid}`} target="_blank" rel="noreferrer">
+                  <small>HTLC</small> {shorten(trade.xusLockTxid, 7)}
+                </a>
+                <b>{fmt(trade.xusAmount, 8)} XUS</b>
+              </div>
+              <div className="paid-col">
+                <b>{fmt(trade.xusPerZec, 6)} XUS / ZEC</b>
+                <span>{fmt(trade.zecPerXus, 8)} ZEC / XUS</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="tape-empty">Completed swaps will appear here after both on-chain legs settle.</div>
+      )}
+    </section>
+  );
+}
+
 function Copy({ text }) {
   const [ok, setOk] = useState(false);
   return (
@@ -179,12 +310,24 @@ export default function App() {
   const [swap, setSwap] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [trades, setTrades] = useState([]);
   const { price, hist } = usePrice(api);
 
   // Load the quote (and keep the rate/inventory fresh).
   useEffect(() => {
     let alive = true;
     const load = () => api.quote().then((q) => alive && setQuote(q)).catch(() => {});
+    load();
+    const t = setInterval(load, 20_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []); // eslint-disable-line
+
+  useEffect(() => {
+    let alive = true;
+    const load = () => api.trades().then((rows) => alive && setTrades(rows)).catch(() => {});
     load();
     const t = setInterval(load, 20_000);
     return () => {
@@ -302,6 +445,8 @@ export default function App() {
         </div>
       </section>
 
+      <BondingCurve quote={quote} />
+
       {!active ? (
         <QuoteForm
           quote={quote}
@@ -322,6 +467,8 @@ export default function App() {
           err={err}
         />
       )}
+
+      <TradeTape trades={trades} />
 
       <footer className="foot">
         <div>

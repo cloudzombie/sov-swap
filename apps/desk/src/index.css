@@ -407,3 +407,79 @@ button { font-family: inherit; }
   .spark { width: 100%; }
 }
 .pb-curve { margin-top: 6px; font-size: 11px; color: var(--good); letter-spacing: 0.01em; }
+
+/* ── live bonding curve ───────────────────────────────────────────────── */
+.curve-card, .tape-card {
+  margin-top: 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.curve-head, .tape-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px 12px;
+}
+.eyebrow { color: var(--muted); font-size: 10px; letter-spacing: .11em; text-transform: uppercase; }
+.curve-head h2, .tape-head h2 { margin: 3px 0 0; font-size: 16px; letter-spacing: -.01em; }
+.buyout { text-align: right; }
+.buyout span { display: block; color: var(--muted); font-size: 11px; }
+.buyout b { display: block; margin-top: 2px; color: var(--steel); font-family: var(--mono); font-size: 19px; }
+.curve-chart { padding: 0 12px; }
+.curve-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.curve-grid { stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 3 5; }
+.curve-line { fill: none; stroke: var(--gold); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.curve-guide { stroke: var(--steel); stroke-width: 1; stroke-dasharray: 3 3; }
+.curve-dot { fill: var(--paper); stroke: var(--steel); stroke-width: 3; }
+.axis-x, .axis-y { fill: var(--faint); font-family: var(--mono); font-size: 9px; }
+.curve-scrub {
+  display: block;
+  width: calc(100% - 88px);
+  margin: -26px 20px 13px 68px;
+  accent-color: var(--gold);
+  cursor: ew-resize;
+}
+.curve-readout {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.curve-readout div { padding: 12px 14px; border-right: 1px solid var(--line); min-width: 0; }
+.curve-readout div:last-child { border-right: 0; }
+.curve-readout span { display: block; color: var(--muted); font-size: 10px; }
+.curve-readout b { display: block; margin-top: 3px; color: var(--ink-soft); font-family: var(--mono); font-size: 11px; overflow-wrap: anywhere; }
+.curve-note { margin: 0; padding: 11px 20px 14px; color: var(--faint); font-size: 10.5px; line-height: 1.55; }
+
+/* ── verified trade tape ──────────────────────────────────────────────── */
+.tape-head { align-items: center; border-bottom: 1px solid var(--line); }
+.verified-pill { color: var(--good); border: 1px solid rgba(116,210,159,.28); background: rgba(116,210,159,.05); border-radius: 999px; padding: 5px 9px; font-family: var(--mono); font-size: 10px; }
+.verified-pill .dot { display: inline-block; margin-right: 5px; vertical-align: 1px; }
+.tape-scroll { overflow-x: auto; }
+.tape-grid { display: grid; grid-template-columns: minmax(230px, 1.35fr) minmax(155px, 1fr) minmax(145px, .8fr); gap: 0; min-width: 580px; }
+.tape-labels { color: var(--faint); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.tape-labels span { padding: 9px 14px; border-right: 1px solid var(--line); }
+.trade-row { border-top: 1px solid var(--line); }
+.trade-row > div { padding: 12px 14px; border-right: 1px solid var(--line); }
+.trade-row > div:last-child { border-right: 0; }
+.tx-col { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-family: var(--mono); font-size: 11px; }
+.tx-col a { color: var(--steel); text-decoration: none; }
+.tx-col a:hover { text-decoration: underline; }
+.tx-col small { color: var(--faint); text-transform: uppercase; }
+.tx-col b { color: var(--ink-soft); font-weight: 500; }
+.paid-col { display: flex; flex-direction: column; justify-content: center; gap: 3px; font-family: var(--mono); }
+.paid-col b { color: var(--gold); font-size: 11px; }
+.paid-col span { color: var(--muted); font-size: 10px; }
+.tape-empty { padding: 28px 20px; color: var(--muted); text-align: center; font-size: 12px; }
+
+@media (max-width: 620px) {
+  .curve-head { flex-direction: column; }
+  .buyout { text-align: left; }
+  .curve-readout { grid-template-columns: repeat(2, 1fr); }
+  .curve-readout div:nth-child(2) { border-right: 0; }
+  .curve-readout div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+}

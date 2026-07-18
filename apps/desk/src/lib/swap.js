@@ -54,6 +54,10 @@ export function makeApi(base) {
     async quote() {
       return (await fetch(`${b}/api/quote`)).json();
     },
+    async trades() {
+      const r = await fetch(`${b}/api/trades`);
+      return r.ok ? (await r.json()).trades ?? [] : [];
+    },
     async createSwap(body) {
       const r = await fetch(`${b}/api/swap`, {
         method: "POST",
